@@ -7,3 +7,7 @@ __pycache__/
 *.pyc
 .claude/
 .snaps/
+
+# Moth reference photos and the original Meshy model are kept off the public site
+assets/moth-reference/
+assets/moth-meshy-original.glb*

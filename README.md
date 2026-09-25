@@ -51,7 +51,7 @@ The pause map shows conch progress by area. Trees between the camera and the pla
 
 The conch, coin, vejigante mask and crate models in `assets/island-assets.glb` were generated with Higgsfield 3D Jutsu. The chest keeps its original animated lid. Moth's model was generated with Meshy from reference photos supplied by the project owner. `assets/moth-optimized.glb` (17.2 MB) is a reduced copy with baked vertex colors. The game loads `assets/moth-lowpoly.glb` (about 400 KB, 3,500 triangles), a flat-shaded low-poly Moth made from it by `tools/lowpoly_moth.py`: the scan is filled into one solid shape, simplified, and each facet takes the fur color around it. Her green eyes are separate geometry, placed on the face surface when the game loads.
 
-`assets/moth-meshy-original.glb.xz` is a lossless archive of the **untouched original Moth GLB**. Extract it with `xz -dk assets/moth-meshy-original.glb.xz` to compare or try another optimization. Claude is welcome to improve the downsizing while keeping Moth's features and browser performance. The 13 images in `assets/moth-reference/` are the owner's visual references; `IMG_0412.jpg` was uploaded to Meshy for the generation. Repository copies have camera metadata removed. Neither the original archive nor reference images are included in `dist/` or the playable zip.
+The untouched original Moth model and the owner's reference photos are kept privately, outside this public repository.
 
 ## Debug mode
 
