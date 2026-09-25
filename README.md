@@ -2,7 +2,7 @@
 
 A small Super Mario Odyssey–style 3D exploration game set on the **Paseo Tablado La Guancha** in Ponce, Puerto Rico. It's built from real map data and runs in the browser on iPhone, Android tablets and desktop. The in-game text is Spanish first, with an English toggle.
 
-Collect **29 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around.
+Collect **30 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around. Marina on the boardwalk lends you a jet ski to race her through eight rings out on the water, with free rematches.
 
 ## Play it
 
@@ -33,17 +33,20 @@ This creates `dist/` and `la-guancha.zip` (about 6 MB). You can upload either on
 
 ## Controls
 
-| | Touch | Keyboard |
-|---|---|---|
-| Move | left thumb stick (appears where you touch) | WASD / arrows |
-| Camera | drag on the right side | mouse drag, Q/R |
-| Jump | ⤒ | Space |
-| Throw pava | 🎩 | E / J |
-| Crouch / ground pound | ⤓ | Shift / K |
-| Talk | 💬 button | F |
-| Map / pause | II button | M / Esc |
+| | Touch | Keyboard | Controller |
+|---|---|---|---|
+| Move | left thumb stick (appears where you touch) | WASD / arrows | left stick / D-pad |
+| Camera | drag on the right side | mouse drag, Q/R | right stick |
+| Jump | ⤒ | Space | A |
+| Throw pava | 🎩 | E / J | X / Y |
+| Crouch / ground pound | ⤓ | Shift / K | triggers |
+| Talk | 💬 button | F | B |
+| Map / pause | II button | M / Esc | Select / Start |
+| Jet ski: speed up and steer / get off | stick / ⤒ | WASD / Space | left stick / A |
 
-Choose one of three save slots before playing and name your character. A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically.
+A Bluetooth controller paired to the phone or tablet works in Safari and Chrome; menus are navigated with the stick, A and B.
+
+Choose one of three save slots before playing. A new game starts in the character creator: name, skin, hair color and style, mustache or beard, and clothes colors, with a turning 3D preview (Options → Edit character changes it later). A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically.
 
 The game is meant to be relaxed: timers never fail a challenge, the pava homes in on targets in front of you, and coins and shells are easy to grab. The pause button (or Esc) opens the game menu: **Mapa** (flags to travel to and every quest marked, tap one to follow it), **Misiones** (the quest log: in progress, available and completed, with a Seguir button), **Colección** (masks, shells, chavos, flags, crates, quests done and play time) and **Opciones** (sound, music, language, save slots). Tapping the ⭐ quest label on screen opens the quest log; T cycles quests. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
 

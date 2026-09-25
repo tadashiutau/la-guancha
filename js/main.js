@@ -168,7 +168,7 @@ ui.onToSlots = () => {
   location.reload();
 };
 ui.onPause = on => { state = on ? 'pause' : 'play'; input.release(); };
-ui.onWarp = (x, y, z, face) => { player.teleport(x, y, z, face); cam.snap(player); };
+ui.onWarp = (x, y, z, face) => { if (game.jetski?.riding) game.jetski.leave('quit'); player.teleport(x, y, z, face); cam.snap(player); };
 ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); game?.onLang(); };
 
 // ------------------------------------------------------------------ loop
@@ -216,7 +216,8 @@ function frame() {
     game.preUpdate(dt, inp);
     const pinp = { ...inp }; // one-shot presses go to the first physics substep only
     for (let i = 0; i < steps; i++) {
-      player.update(h, game.blockInput ? { mx: 0, my: 0 } : pinp, cam.yaw);
+      if (game.jetski?.riding) game.jetski.drive(h, game.blockInput ? { mx: 0, my: 0 } : pinp);
+      else player.update(h, game.blockInput ? { mx: 0, my: 0 } : pinp, cam.yaw);
       game.onPlayerEvents(player.events);
       if (i === 0) { pinp.jumpPressed = pinp.hatPressed = pinp.crouchPressed = false; }
     }

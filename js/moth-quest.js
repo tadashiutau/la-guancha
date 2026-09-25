@@ -39,6 +39,12 @@ const WHERE = [
   line('Te espero aquí. Con paciencia. Mentira, apúrate.', "I'll wait here. Patiently. Just kidding, hurry up."),
   line('Un Churu, humano. No es tan difícil.', "One Churu, human. It's not that hard."),
 ];
+// a pointer for the current step, said after the grumble
+const WHERE_NEXT = {
+  2: line('Mi Churu está en el kiosko de Doña Carmen. La pava no lo va a buscar sola.', "My Churu is at Doña Carmen's kiosk. Your pava won't fetch it by itself."),
+  3: line('Ese pelícano vuela bajito por el tablado. Cuando pase, tírale la pava.', 'That pelican swoops low over the boardwalk. Throw your pava when it passes.'),
+  4: line('Ese pájaro lo soltó. Si cayó al agua, bucea. Búscalo y tráemelo.', 'That bird dropped it. If it fell in the water, dive. Find it and bring it to me.'),
+};
 const GREET = [
   line('¿Qué quieres? Si no son cariños, no me interesa.', "What do you want? If it isn't pets, I'm not interested."),
   line('Mrrp. Mi humano favorito. Bueno, el único que me da Churus.', 'Mrrp. My favorite human. Well, the only one who gives me Churus.'),
@@ -206,7 +212,8 @@ export function buildMothQuest(g, places) {
       return;
     }
     if (s === 6) return feed();
-    if (s >= 2 && s <= 5) return g.ui.say('Moth', [pick(WHERE)]);
+    if (s >= 2 && s <= 4) return g.ui.say('Moth', [pick(WHERE), WHERE_NEXT[s]]);
+    if (s === 5) return g.ui.say('Moth', [line('¡Ya huelo el Churu! No te muevas.', "I can smell the Churu! Don't move.")]);
     // after the quest: once you've chosen to pet her, every tap is a pet
     if (cat.petting) {
       pet();

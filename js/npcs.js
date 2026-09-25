@@ -40,6 +40,11 @@ const CHATTER = [
   { es: 'Yo vengo a caminar aquí todas las mañanas, antes de que caliente el sol.', en: 'I walk here every morning, before the sun gets hot.' },
   { es: '¡Brincando así vas a llegar a la luna, mijo!', en: 'Jumping like that you’ll reach the moon, kid!' },
   { es: 'Si te cansas, siéntate en un banco y mira los botes.', en: 'If you get tired, sit on a bench and watch the boats.' },
+  { es: 'Cada kiosko tiene su especialidad. Yo digo que hay que probarlos todos, uno por paseo.', en: 'Every kiosk has its specialty. I say try them all, one per visit.' },
+  { es: 'La brisa cambia cuando pasas de la playa al tablado. Así sé que ya casi llego.', en: 'The breeze changes when you go from the beach to the boardwalk. That’s how I know I’m almost there.' },
+  { es: 'Vi a Tito trotando con cronómetro. Me cansé de solo mirarlo.', en: 'I saw Tito jogging with a stopwatch. Just watching him wore me out.' },
+  { es: 'Marina tiene una motora acuática en el tablado. Anda buscando a alguien que le corra.', en: 'Marina has a jet ski at the boardwalk. She’s looking for someone to race her.' },
+  { es: 'Cuando los músicos empiezan la plena, hasta las gaviotas llevan el ritmo.', en: 'When the musicians start the plena, even the gulls keep time.' },
 ];
 
 // hints for masks that aren't found yet
@@ -65,6 +70,7 @@ const HINTS = {
   pelicano: { es: 'El pelícano del muelle viejo quiere jugar contigo.', en: 'The pelican on the old pier wants to play.' },
   gatito: { es: 'La nena del parque perdió su gatita.', en: 'The girl in the park lost her kitten.' },
   carrera: { es: 'Tito siempre reta a la gente a correr hasta la torre.', en: 'Tito always challenges people to race to the tower.' },
+  jetski: { es: 'Marina te presta una motora acuática si aceptas su carrera de aros en el mar.', en: 'Marina will lend you a jet ski if you take on her sea ring race.' },
   aros: { es: 'En la arena hay un aro verde. Pásale por el medio.', en: 'There’s a green ring on the sand. Go through it.' },
   cocos: { es: 'Tírale la pava a los cocos de las palmas cerca de la rotonda del sur.', en: 'Throw your hat at the coconuts in the palms by the south roundabout.' },
   pedazos_parque: { es: 'Hay pedazos de máscara regados por el parque.', en: 'There are mask pieces scattered around the park.' },
@@ -83,7 +89,7 @@ export function buildCrowd(g, along, fromNorth, total) {
 
   const say = n => async (g) => {
     const lines = [{ es: `¡Hola, ${g.playerName}!`, en: `Hi, ${g.playerName}!` }];
-    if (n.lines) lines.push(...n.lines);
+    if (n.lines) lines.push(...(typeof n.lines === 'function' ? n.lines(g) : n.lines));
     else {
       lines.push(CHATTER[Math.floor(Math.random() * CHATTER.length)]);
       const left = g.masks.filter(m => !m.got && HINTS[m.id]);
@@ -119,7 +125,7 @@ export function buildCrowd(g, along, fromNorth, total) {
     const n = person(NAMES[i % NAMES.length], M.randomLook(R, jog ? { hat: 'cap' } : {}), 0, 0, 0);
     n.f = 0.05 + R() * 0.9; n.dir = R() < 0.5 ? 1 : -1; n.lane = 0.9 + R() * 1.5; // the water-side half of the deck, clear of the kiosk counters
     n.speed = jog ? 3.4 : 1.0 + R() * 0.6;
-    if (jog) n.name = { es: 'Corredora', en: 'Jogger' };
+    if (jog) n.name = { es: 'Atleta', en: 'Runner' };
     n.update = (dt) => {
       let sp = n.speed;
       if (nearPlayer(n)) sp = 0;
@@ -191,11 +197,13 @@ export function buildCrowd(g, along, fromNorth, total) {
       const [sx, sz] = pg[i % pg.length];
       const n = person(KIDS[i], M.randomLook(R, { scale: 0.72, hat: 'none' }), sx + 3, sz, 0);
       n.target = pg[(i + 1) % pg.length]; n.wait = R() * 2;
-      n.lines = [[
+      const own = [
         { es: '¡Vamos a la chorrera! ¡Tú no me alcanzas!', en: 'Let’s go to the slide! You can’t catch me!' },
         { es: 'Mi mamá dice que no me tire del columpio. Pero es bien divertido.', en: 'My mom says not to jump off the swing. But it’s really fun.' },
         { es: '¿Tú puedes hacer un salto mortal? ¡Yo sí!', en: 'Can you do a backflip? I can!' },
-      ][i % 3]];
+      ][i % 3];
+      // only while Mishu is still missing
+      n.lines = g => (g.q.kitten ? [own] : [own, { es: 'Si ves a Mishu, la gatita anaranjada, dile a Gabi. Lleva rato buscándola.', en: 'If you see Mishu, the orange kitten, tell Gabi. She’s been looking everywhere.' }]);
       n.update = (dt) => {
         if (nearPlayer(n)) { walkAnim(n, 0, dt); faceTo(n, Math.atan2(g.player.pos.x - n.x, g.player.pos.z - n.z), dt); return; }
         if (n.wait > 0) { n.wait -= dt; walkAnim(n, 0, dt); return; }
@@ -260,6 +268,7 @@ export function buildCrowd(g, along, fromNorth, total) {
       n.lines = [
         { es: `¡Wepa! Estamos tocando plena. Yo toco el ${what}.`, en: `Wepa! We’re playing plena. I play the ${what}.` },
         { es: 'La plena nació en Ponce, en el barrio San Antón. ¡Aquí se goza!', en: 'Plena was born in Ponce, in the San Antón neighborhood. Enjoy!' },
+        { es: 'Cada verso trae un cuento nuevo. El de hoy: alguien corrió una carrera y perdió la pava.', en: 'Every verse brings a new story. Today’s: someone ran a race and lost their pava.' },
       ];
       n.update = (dt, now) => {
         const b = Math.sin(now * 5.6 + i);

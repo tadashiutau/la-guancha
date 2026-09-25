@@ -712,7 +712,8 @@ export class Game {
     ui.talkButton(near);
     if (near && (inp.talkPressed)) this.talkTo(near);
 
-    for (const c of this.challenges) c.update?.(dt, now);
+    // on the jet ski only Marina's race runs, so kittens and pelicans don't react to you out at sea
+    for (const c of this.challenges) if (!this.jetski?.riding || c === this.jetski) c.update?.(dt, now);
 
     if (this.timerState) {
       const ts = this.timerState;

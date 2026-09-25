@@ -96,7 +96,7 @@ export class UI {
       if (save) {
         const info = document.createElement('p');
         const minutes = Math.floor((save.time || 0) / 60);
-        info.textContent = `${(save.masks || []).length}/${this.game?.masks.length || 29} ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+        info.textContent = `${(save.masks || []).length}/${this.game?.masks.length || 30} ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
         card.append(info);
       }
       const row = document.createElement('div'); row.className = 'row';
