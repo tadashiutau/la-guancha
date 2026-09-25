@@ -262,10 +262,10 @@ export function buildProps(g, props) {
     const stripes = 7;
     for (let j = 0; j < stripes; j++) {
       const u = (j + 0.5) / stripes - 0.5;
-      box(j % 2 ? cb : ca, f.x + nx * 0.55 + tx * u * w * 0.9, k.eave - 0.95, f.z + nz * 0.55 + tz * u * w * 0.9, w * 0.9 / stripes + 0.01, 0.05, 1.15, yawT, -0.5);
+      box(j % 2 ? cb : ca, f.x + nx * 0.5 + tx * u * w * 0.9, k.eave - 0.3, f.z + nz * 0.5 + tz * u * w * 0.9, w * 0.9 / stripes + 0.01, 0.05, 1.0, yawT, -0.35); // tucked under the roof edge, above the vendor's head
     }
     // a solid serving counter in front of the vendor (the boardwalk in front stays clear for walkers)
-    const qx = f.x + nx * 1.45, qz = f.z + nz * 1.45, qh = 1.05;
+    const qx = f.x + nx * 1.45, qz = f.z + nz * 1.45, qh = 0.6; // waist height for the vendor
     box(0xcdb672, qx, y0 + qh / 2 - 0.1, qz, w * 0.7, qh + 0.2, 0.45, yawT);
     box(0x8a5a3c, qx, y0 + qh + 0.03, qz, w * 0.7 + 0.1, 0.07, 0.55, yawT);
     solid(qx, qz, w * 0.35, 0.23, yawT, y0 - 0.2, y0 + qh, 'counter');

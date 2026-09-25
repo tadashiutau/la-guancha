@@ -1182,8 +1182,10 @@ function buildSigns(scene, info, tab) {
       const d = Math.min(...tab.map(l => polyDist(x, z, l)));
       if (!best || d < best.d) best = { d, x, z, nx: x - k.x, nz: z - k.z };
     }
-    m.position.set(best.x, k.eave - 0.25, best.z);
-    m.lookAt(best.x + best.nx, k.eave - 0.25, best.z + best.nz);
+    // the name board sits up on the roof edge, leaving the front clear for the awning and vendor
+    const nl = Math.hypot(best.nx, best.nz) || 1;
+    m.position.set(best.x + best.nx / nl * 0.1, k.eave + 0.3, best.z + best.nz / nl * 0.1);
+    m.lookAt(m.position.x + best.nx, k.eave + 0.3, m.position.z + best.nz);
     k.front = { x: best.x, z: best.z, nx: best.nx, nz: best.nz };
     scene.add(m);
     info.signs.push(m);
