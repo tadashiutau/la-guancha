@@ -45,7 +45,7 @@ This creates `dist/` and `la-guancha.zip` (about 6 MB). You can upload either on
 
 Choose one of three save slots before playing and name your character. A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically.
 
-The game is meant to be relaxed: timers never fail a challenge, the pava homes in on targets in front of you, and coins and shells are easy to grab. When several quests are going, tap the ⭐ quest label at the top (or press T) to pick which one the marker follows. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
+The game is meant to be relaxed: timers never fail a challenge, the pava homes in on targets in front of you, and coins and shells are easy to grab. The pause button (or Esc) opens the game menu: **Mapa** (flags to travel to and every quest marked, tap one to follow it), **Misiones** (the quest log: in progress, available and completed, with a Seguir button), **Colección** (masks, shells, chavos, flags, crates, quests done and play time) and **Opciones** (sound, music, language, save slots). Tapping the ⭐ quest label on screen opens the quest log; T cycles quests. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
 
 The pause map shows conch progress by area. Trees between the camera and the player fade so they do not hide the route. Moth's mystery has a quest marker at the park to start and a marker on every clue afterward; its progress stays in the selected save slot.
 

@@ -58,29 +58,29 @@ function prideTexture() {
   return t;
 }
 
-export function buildAvesQuest(g, { top, H, onLane, dist2 }) {
+export function buildAvesQuest(g, { top, H, onLane, dist2, center }) {
   const { phys, data } = g;
   const stage = () => g.q.aves || 0;
   const found = () => g.q.avesFound || [];
 
-  // ---------------------------------------------------------------- where: the woods, top right
-  // sample the LiDAR canopy map in the north-east corner of the level
+  // ---------------------------------------------------------------- where: the woods by the beach
+  // the forest block between the road and the beach (top right of the map); `center` is its middle,
+  // and the LiDAR canopy map says which spots around it are actually wooded
   const pts = [];
-  const b = data.bounds;
-  for (let z = b.z0 + 4; z < (b.z0 + b.z1) / 2; z += 3) {
-    for (let x = (b.x0 + b.x1) / 2 + 40; x < b.x1 - 4; x += 3) {
-      if (data.canopyH(x, z) > 3 && H(x, z) > 0.3) pts.push([x, z]);
+  const [cx, cz] = center;
+  for (let z = cz - 60; z < cz + 60; z += 3) {
+    for (let x = cx - 60; x < cx + 60; x += 3) {
+      if (dist2(x, z, cx, cz) < 60 && data.canopyH(x, z) > 3 && H(x, z) > 0.3) pts.push([x, z]);
     }
   }
   if (pts.length < 20) return; // no woods found: skip the quest
-  const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cz = pts.reduce((a, p) => a + p[1], 0) / pts.length;
   const open = (x, z, r = 1) => H(x, z) > 0.3 && !onLane(x, z)
     && !phys.near(x, z, r + 0.5).some(c => (c.solid || c.tag === 'canopy') && c.maxx > x - r && c.minx < x + r && c.maxz > z - r && c.minz < z + r);
-  // the Club meets in a clearing at the edge of the woods, on the side facing the rest of the park
+  // the Club meets in the sandy clearing closest to the heart of the woods
   let club = null;
   for (let r = 0; r < 60 && !club; r += 1.5) {
     for (let k = 0; k < 16; k++) {
-      const a = k / 16 * Math.PI * 2 + Math.PI; // start looking west/south-west
+      const a = k / 16 * Math.PI * 2;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (data.canopyH(x, z) < 1 && open(x, z, 2.5)) { club = { x, z }; break; }
     }
@@ -196,7 +196,7 @@ export function buildAvesQuest(g, { top, H, onLane, dist2 }) {
   const tmpV = new THREE.Vector3();
   const flying = [];
   let jitter = 0;
-  g.challenge({
+  const avesC = g.challenge({
     onLoad() {
       const s = stage(), f = found();
       bushes.forEach(q => {
@@ -298,4 +298,10 @@ export function buildAvesQuest(g, { top, H, onLane, dist2 }) {
       }
     },
   });
+
+  g.quest({ id: 'aves', name: line('Club de Observación de Aves', 'Birdwatching Club'), giver: 'Wilfredo', challenge: avesC,
+    desc: line('A los "observadores de aves" del bosquecito se les regaron sus cosas entre los arbustos.', 'The "birdwatchers" in the little woods dropped their things in the bushes.'),
+    progress: () => (stage() === 1 ? `${found().length}/4` : ''),
+    status: () => (stage() >= 3 ? 'done' : stage() >= 1 ? 'active' : 'available'),
+    where: () => ({ x: club.x, y: clubY, z: club.z, label: line('Habla con Wilfredo', 'Talk to Wilfredo') }) });
 }

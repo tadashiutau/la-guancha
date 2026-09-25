@@ -92,6 +92,43 @@
   @keyframes dlg-pop { 0% { opacity: 0; transform: translateY(.35em) scale(.6); } 70% { opacity: 1; transform: translateY(-.12em) scale(1.12); } 100% { opacity: 1; transform: none; } }
   @keyframes dlg-next { to { transform: translateY(3px); } }
   @media (prefers-reduced-motion: reduce) { .dlg-char.shown, #dialog .next { animation: none; opacity: 1; transform: none; } }
+  /* ---- game menu */
+  #menu { padding: calc(8px + var(--safe-t)) calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) calc(8px + var(--safe-l)); }
+  .menu { width: min(100%, 980px); height: min(100%, 760px); display: flex; flex-direction: column; background: #fffaf0; color: var(--ink); border-radius: 22px; border: 4px solid #2d6a4c; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow: hidden; }
+  .mhead { display: flex; gap: 8px; align-items: center; padding: 10px; background: #2d6a4c; flex-wrap: wrap; }
+  #mtabs { display: flex; gap: 6px; flex: 1 1 auto; }
+  #mtabs button { flex: 1 1 0; min-height: 52px; border: 3px solid transparent; border-radius: 14px; background: rgba(255,255,255,.15); color: #fff; font: inherit; font-weight: 900; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 6px; }
+  #mtabs button .mi { font-size: 20px; line-height: 1; }
+  #mtabs button.on { background: #fffaf0; color: var(--ink); border-color: var(--gold); }
+  .mhead #bResume { flex: 0 0 auto; margin: 0; }
+  .mbody { flex: 1 1 auto; overflow: auto; padding: 14px 16px 18px; -webkit-overflow-scrolling: touch; }
+  .mtab { display: none; }
+  .mtab.show { display: block; }
+  .mtab h3 { margin: 16px 0 6px; font-size: 19px; color: #2d6a4c; }
+  .mhint { margin: 0 0 8px; font-weight: 700; color: #2d6a4c; font-size: 15px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13px; font-weight: 700; }
+  .legend > span { display: inline-flex; align-items: center; gap: 5px; }
+  .lg { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 2px solid var(--ink); }
+  .lg.you { background: #ffd400; } .lg.flag { background: #e3342f; border-radius: 2px; } .lg.track { background: #ffd23f; transform: rotate(45deg); border-radius: 2px; }
+  .lg.active { background: #7fd3e8; } .lg.avail { background: #fff; } .lg.mask { background: #b33a2a; }
+  .credits { font-size: 12px; opacity: .7; margin: 14px 0 0; }
+  @media (max-width: 560px) { #mtabs button { font-size: 12px; min-height: 48px; } .mhead #bResume { flex: 1 1 100%; } }
+  /* quest log */
+  .qsec { margin: 4px 0 8px; font-size: 16px; font-weight: 900; color: #b33a2a; text-transform: uppercase; letter-spacing: .04em; }
+  .qcard { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: #fff; border: 3px solid #d8cdb4; }
+  .qcard.tracked { border-color: var(--gold); background: #fff6d6; }
+  .qcard.done { opacity: .72; }
+  .qcard b { font-size: 17px; }
+  .qcard .qd { grid-column: 1; font-size: 14px; line-height: 1.35; }
+  .qcard .qm { grid-column: 1; font-size: 13px; font-weight: 800; color: #2d6a4c; }
+  .qcard .pill { grid-column: 2; grid-row: 1 / span 3; min-height: 44px; font-size: 15px; flex: none; }
+  /* collection */
+  #statTiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .stile { padding: 10px 12px; border-radius: 14px; background: #fff; border: 3px solid #d8cdb4; }
+  .stile .sv { font-size: 26px; font-weight: 900; }
+  .stile .sl { font-size: 13px; font-weight: 800; color: #2d6a4c; }
+  .stile .sb { height: 8px; border-radius: 6px; background: #eee3cc; margin-top: 6px; overflow: hidden; }
+  .stile .sb i { display: block; height: 100%; background: linear-gradient(90deg, #2e9e5b, #f7c948); }
   #mapWrap { position: relative; width: 100%; aspect-ratio: 1200 / 840; border-radius: 14px; overflow: hidden; border: 3px solid var(--ink); background: #1b6fa3; }
   #mapWrap canvas { width: 100%; height: 100%; display: block; }
   #maskList { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; font-size: 14px; }
@@ -191,33 +228,51 @@
   </div>
 </div>
 
-<div id="pause" class="screen">
-  <div class="card">
-    <h2 data-t="paused">Pausa</h2>
-    <div class="row">
-      <button class="pill primary" id="bResume" data-t="resume">Seguir jugando</button>
-      <button class="pill" id="bMap" data-t="map">Mapa</button>
-      <button class="pill" id="bToSlots" data-t="saveSlots">Partidas</button>
+<!-- the game menu: Map · Quests · Collection · Options -->
+<div id="menu" class="screen">
+  <div class="menu">
+    <header class="mhead">
+      <nav id="mtabs" role="tablist">
+        <button role="tab" data-tab="map"><span class="mi">🗺️</span><span data-t="tabMap">Mapa</span></button>
+        <button role="tab" data-tab="quests"><span class="mi">⭐</span><span data-t="tabQuests">Misiones</span></button>
+        <button role="tab" data-tab="stats"><span class="mi">🏆</span><span data-t="tabStats">Colección</span></button>
+        <button role="tab" data-tab="options"><span class="mi">⚙️</span><span data-t="tabOptions">Opciones</span></button>
+      </nav>
+      <button class="pill primary" id="bResume">▶ <span data-t="resume">Seguir jugando</span></button>
+    </header>
+    <div class="mbody">
+      <section id="tab-map" class="mtab">
+        <p class="mhint" data-t="mapHint">Toca una bandera para viajar · toca una misión para seguirla</p>
+        <div id="mapWrap"><canvas id="bigmap" width="1200" height="840"></canvas></div>
+        <div class="legend">
+          <span><i class="lg you"></i><span data-t="lgYou">Tú</span></span>
+          <span><i class="lg flag"></i><span data-t="lgFlag">Bandera (viajar)</span></span>
+          <span><i class="lg track"></i><span data-t="lgTracked">Misión que sigues</span></span>
+          <span><i class="lg active"></i><span data-t="lgActive">En progreso</span></span>
+          <span><i class="lg avail"></i><span data-t="lgAvail">Nueva misión</span></span>
+          <span><i class="lg mask"></i><span data-t="lgMask">Máscara encontrada</span></span>
+        </div>
+        <h3 data-t="shellAreas">Conchas por zona</h3>
+        <div id="shellProgress"></div>
+      </section>
+      <section id="tab-quests" class="mtab"><div id="questLog"></div></section>
+      <section id="tab-stats" class="mtab">
+        <div id="statTiles"></div>
+        <h3 data-t="masksTitle">Máscaras de vejigante</h3>
+        <div id="maskList"></div>
+      </section>
+      <section id="tab-options" class="mtab">
+        <div class="row">
+          <button class="pill" id="bLang2" data-t="language">English</button>
+          <button class="pill" id="bSound"></button>
+          <button class="pill" id="bMusic"></button>
+        </div>
+        <div class="row"><button class="pill" id="bToSlots" data-t="saveSlots">Partidas</button></div>
+        <h3 data-t="controls">Controles</h3>
+        <pre class="ctrl" id="ctrlText2"></pre>
+        <p class="credits">Mapa: © OpenStreetMap contributors (ODbL) · Elevación y LiDAR: USGS 3DEP · Batimetría: NOAA NCEI CUDEM · Fotos aéreas: USDA NAIP, Esri World Imagery · Motor: three.js</p>
+      </section>
     </div>
-    <div class="row">
-      <button class="pill" id="bLang2" data-t="language">English</button>
-      <button class="pill" id="bSound"></button>
-      <button class="pill" id="bMusic"></button>
-    </div>
-    <h2 style="margin-top:16px;font-size:20px" data-t="controls">Controles</h2>
-    <pre class="ctrl" id="ctrlText2"></pre>
-    <p style="font-size:12px;opacity:.7;margin:12px 0 0">Mapa: © OpenStreetMap contributors (ODbL) · Elevación y LiDAR: USGS 3DEP · Batimetría: NOAA NCEI CUDEM · Fotos aéreas: USDA NAIP, Esri World Imagery · Motor: three.js</p>
-  </div>
-</div>
-
-<div id="mapScreen" class="screen">
-  <div class="card" style="max-width:900px">
-    <h2><span data-t="map">Mapa</span> · <small style="font-size:15px" data-t="warp">Toca una bandera para viajar</small></h2>
-    <h2 style="margin:12px 0 0;font-size:20px" data-t="shellAreas">Conchas por zona</h2>
-    <div id="shellProgress"></div>
-    <div id="mapWrap" style="margin-top:12px"><canvas id="bigmap" width="1200" height="840"></canvas></div>
-    <div id="maskList"></div>
-    <div class="row"><button class="pill primary" id="bMapClose" data-t="close">Cerrar</button></div>
   </div>
 </div>
 

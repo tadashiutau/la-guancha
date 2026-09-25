@@ -360,7 +360,7 @@ export function defineLevel(g) {
     return m;
   });
   startRing.rotation.y = rings[0].rotation.y;
-  g.challenge({
+  const ringsC = g.challenge({
     active: false,
     onLoad() { if (g.q.rings) startRing.visible = false; },
     objective() {
@@ -415,7 +415,7 @@ export function defineLevel(g) {
     return { m, x, y: y - 0.35, z, down: false, vy: 0 };
   });
   g.aimables.push(() => cocos.filter(c => !c.down).map(c => c.m.position));
-  g.challenge({
+  const cocosC = g.challenge({
     onLoad() { if (g.q.cocos) cocos.forEach(c => { c.down = true; c.m.visible = false; }); },
     objective() {
       if (g.q.cocos || !cocos.some(c => c.down)) return null;
@@ -477,7 +477,7 @@ export function defineLevel(g) {
       { es: 'Creo que se escondió entre los carros del estacionamiento grande, cerca del tablado.', en: 'I think she hid between the cars in the big parking lot near the boardwalk.' },
     ]);
   });
-  g.challenge({
+  const kittenC = g.challenge({
     onLoad() {
       if (g.q.kitten) { kit.state = 'home'; kitten.position.set(gabi.x + 0.8, gabi.y, gabi.z + 0.3); }
       else if (g.q.kittenFollowing) kit.state = 'follow';
@@ -522,7 +522,7 @@ export function defineLevel(g) {
     g.root.add(pel);
   }
   gabi.quest = g => (kit.state === 'home' ? null : kit.state === 'follow' || g.q.kittenAsked ? 'active' : 'available');
-  g.challenge({
+  const pelicanC = g.challenge({
     objective() {
       if (g.q.pelican || pelState.i === 0 || pelState.fly > 0) return null;
       return { x: pel.position.x, y: pel.position.y, z: pel.position.z, label: { es: 'Pelícano', en: 'Pelican' } };
@@ -597,7 +597,7 @@ export function defineLevel(g) {
   const shardSet = (id, pts, onDone) => {
     const key = 'sh_' + id;
     const meshes = pts.map(([x, y, z]) => { const m = M.shardMesh(); m.position.set(x, y, z); g.root.add(m); return m; });
-    g.challenge({
+    return g.challenge({
       onLoad() { (g.q[key] || []).forEach(i => (meshes[i].visible = false)); },
       objective() {
         const got = g.q[key] || [];
@@ -637,7 +637,7 @@ export function defineLevel(g) {
   const parkTree = info.trees.filter(tr2 => tr2[2] === 'tree' && dist2(tr2[0], tr2[1], pcx, pcz) < 30).sort((a, b) => b[3] - a[3])[0];
   if (parkTree) parkPts.push([parkTree[0], parkTree[3] + 0.8, parkTree[1]]);
   else parkPts.push([pcx + 5, top(pcx + 5, pcz) + 3.2, pcz]);
-  shardSet('park', parkPts, () => {
+  const shardsParkC = shardSet('park', parkPts, () => {
     const y = fp ? fp.top + 1.5 : top(pcx, pcz) + 1.5;
     g.reveal('pedazos_parque', fp ? fp.x : pcx, y, fp ? fp.z : pcz);
   });
@@ -647,7 +647,7 @@ export function defineLevel(g) {
   const boatPts = [];
   for (const b of moored) { if (boatPts.every(p => dist2(p[0], p[2], b.x, b.z) > 10)) boatPts.push([b.x, b.top + 1.0, b.z]); if (boatPts.length === 5) break; }
   const longest = info.piers.slice().sort((a, b) => dist2(b[0], b[1], b[2], b[3]) - dist2(a[0], a[1], a[2], a[3]))[0];
-  shardSet('bay', boatPts, () => {
+  const shardsBayC = shardSet('bay', boatPts, () => {
     const [ax, az, bx2, bz2, y] = longest;
     const end = H(ax, az) < H(bx2, bz2) ? [ax, az] : [bx2, bz2];
     g.reveal('pedazos_bahia', end[0], y + 1.5, end[1]);
@@ -927,7 +927,55 @@ export function defineLevel(g) {
   };
   const mothPark = mothSpot(pkx + 4, pkz + 4);
   buildMothQuest(g, { top, H, park: mothPark, carmen, carmenFace: Math.atan2(sf.nx, sf.nz), along, total, deckY });
-  buildAvesQuest(g, { top, H, onLane, dist2 });
+  buildAvesQuest(g, { top, H, onLane, dist2, center: L(380, 140) }); // the woods between the road and the beach
+
+  // ---------------------------------------------------------------- quest log entries (menu → Misiones)
+  const Q = (es, en) => ({ es, en });
+  const at = (n, label) => () => ({ x: n.x, y: n.y, z: n.z, label });
+  const maskDone = id => !!g.maskById(id)?.got;
+  g.quest({ id: 'tomas', name: Q('Bienvenida a La Guancha', 'Welcome to La Guancha'), giver: 'Don Tomás',
+    desc: Q('Habla con Don Tomás, el guía de la entrada. Él te explica todo.', 'Talk to Don Tomás, the guide at the entrance. He explains everything.'),
+    status: () => (g.q.tomas ? 'done' : 'available'), where: at(tomas, Q('Habla con Don Tomás', 'Talk to Don Tomás')) });
+  g.quest({ id: 'race', name: Q('Carrera con Tito', 'Race with Tito'), giver: 'Tito', challenge: race,
+    desc: Q('Llega a la cima de la torre del otro lado del tablado. ¡Sin prisa si se acaba el tiempo!', 'Reach the top of the tower at the other end of the boardwalk. No rush if time runs out!'),
+    status: () => (g.q.race ? 'done' : race.active ? 'active' : 'available'), where: at(tito, Q('Habla con Tito', 'Talk to Tito')) });
+  g.quest({ id: 'rings', name: Q('Los aros de la playa', 'The beach rings'), giver: 'Yari', challenge: ringsC,
+    desc: Q('Pasa por el aro verde en la arena y sigue la línea de aros.', 'Go through the green ring on the sand and follow the line of rings.'),
+    status: () => (g.q.rings ? 'done' : ringsC.active ? 'active' : 'available'),
+    where: () => ({ x: startRing.position.x, y: startRing.position.y - 1.6, z: startRing.position.z, label: Q('Aro verde de la playa', 'Green ring on the beach') }) });
+  g.quest({ id: 'cocos', name: Q('Tumba los cocos', 'Knock down the coconuts'), challenge: cocosC,
+    desc: Q('Tírale la pava a los cocos de unas palmas altas. El mapa te dice dónde.', 'Throw your pava at the coconuts in some tall palms. The map shows where.'),
+    progress: () => `${cocos.filter(c => c.down).length}/${cocos.length}`,
+    status: () => (g.q.cocos ? 'done' : cocos.some(c => c.down) ? 'active' : 'available'),
+    where: () => ({ x: cocos[0].x, y: cocos[0].y - 4, z: cocos[0].z, label: Q('Palmas con cocos', 'Palms with coconuts') }) });
+  g.quest({ id: 'kitten', name: Q('La gatita de Gabi', "Gabi's kitten"), giver: 'Gabi', challenge: kittenC,
+    desc: Q('Gabi perdió a Mishu. Encuéntrala y llévala de vuelta al parque.', 'Gabi lost Mishu. Find her and bring her back to the park.'),
+    status: () => (g.q.kitten ? 'done' : g.q.kittenAsked || g.q.kittenFollowing ? 'active' : 'available'), where: at(gabi, Q('Habla con Gabi', 'Talk to Gabi')) });
+  if (perches.length) g.quest({ id: 'pelican', name: Q('El pelícano del muelle viejo', 'The old pier pelican'), challenge: pelicanC,
+    desc: Q('Acércate al pelícano y síguelo de pilote en pilote.', 'Walk up to the pelican and follow it from piling to piling.'),
+    status: () => (g.q.pelican ? 'done' : pelState.i > 0 ? 'active' : 'available'),
+    where: () => ({ x: perches[0][0], y: perches[0][2], z: perches[0][1], label: Q('Pelícano del muelle viejo', 'Old pier pelican') }) });
+  g.quest({ id: 'chest', name: Q('El cofre hundido', 'The sunken chest'),
+    desc: Q('Hay un cofre en el fondo de la bahía. Sigue las burbujas y bucea.', 'There is a chest on the bottom of the bay. Follow the bubbles and dive.'),
+    status: () => (g.q.chest ? 'done' : 'available'), where: () => ({ x: chx, y: chY, z: chz, label: Q('Cofre hundido', 'Sunken chest') }) });
+  const shardQ = (id, key, n, name, desc, c, pts) => g.quest({ id, name, desc, challenge: c,
+    progress: () => `${(g.q[key] || []).length}/${n}`,
+    status: () => ((g.q[key] || []).length >= n ? 'done' : (g.q[key] || []).length ? 'active' : 'available'),
+    where: () => ({ x: pts[0][0], y: pts[0][1] - 1, z: pts[0][2], label: name }) });
+  shardQ('shards_park', 'sh_park', parkPts.length, Q('Pedazos del parque', 'Pieces in the park'),
+    Q('Junta los pedazos rojos de máscara por el parque.', 'Collect the red mask pieces around the park.'), shardsParkC, parkPts);
+  if (boatPts.length) shardQ('shards_bay', 'sh_bay', boatPts.length, Q('Pedazos de la bahía', 'Pieces in the bay'),
+    Q('Hay pedazos de máscara encima de los botes anclados.', 'There are mask pieces on top of the moored boats.'), shardsBayC, boatPts);
+  g.quest({ id: 'shop', name: Q('La tienda de Doña Carmen', "Doña Carmen's shop"), giver: 'Doña Carmen',
+    desc: Q('Junta 100 chavos y cómprale su máscara especial.', 'Save up 100 chavos and buy her special mask.'),
+    progress: () => (g.shop.mask ? '' : `${Math.min(g.wallet, 100)}/100 chavos`),
+    status: () => (g.shop.mask ? 'done' : 'available'), where: at(carmen, Q('Kiosko de Doña Carmen', "Doña Carmen's kiosk")) });
+  g.quest({ id: 'conchas', name: Q('Todas las conchas', 'Every conch shell'),
+    desc: Q('Hay 50 conchas por toda La Guancha. En el mapa ves cuántas quedan por zona.', 'There are 50 conch shells all over La Guancha. The map shows how many are left in each area.'),
+    progress: () => `${g.conchaTotal - g.conchas.filter(c => c.alive).length}/${g.conchaTotal}`,
+    status: () => (maskDone('conchas') || !g.conchas.some(c => c.alive) ? 'done' : g.conchas.some(c => !c.alive) ? 'active' : 'available'),
+    where: () => { const P = g.player.pos; const c = g.conchas.filter(c => c.alive).sort((a, b) => dist2(a.x, a.z, P.x, P.z) - dist2(b.x, b.z, P.x, P.z))[0] || g.conchas[0];
+      return { x: c.x, y: c.y, z: c.z, label: Q('Concha más cercana', 'Nearest conch') }; } });
 
   buildProps(g, props);
   buildCrowd(g, along, fromNorth, total);

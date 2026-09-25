@@ -24,11 +24,11 @@ export class UI {
     $('bNo').onclick = () => { $('confirm').classList.remove('show'); this.confirmed = null; };
     $('pauseBtn').addEventListener('pointerdown', e => { e.stopPropagation(); this.pause(true); });
     // quest tracker: tap the ⭐ label to pick which quest to follow
-    $('qtop').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); this.toggleQuestList(); });
+    $('qtop').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); this.openMenu('quests'); });
     window.addEventListener('keydown', e => { if (e.code === 'KeyT' && e.target.tagName !== 'INPUT') this.game?.nextQuest(); });
     $('bResume').onclick = () => this.pause(false);
-    $('bMap').onclick = () => { this.pause(false, true); this.openMap(); };
-    $('bMapClose').onclick = () => this.closeMap();
+    this.tab = 'map';
+    for (const b of document.querySelectorAll('#mtabs button')) b.onclick = () => this.showTab(b.dataset.tab);
     $('bSound').onclick = () => {
       this.sfx.setMuted(!this.sfx.muted);
       try { localStorage.setItem('guancha.muted', this.sfx.muted ? '1' : '0'); } catch (e) { /* ignore */ }
@@ -152,10 +152,28 @@ export class UI {
     $('ctrlText').textContent = 'Error: ' + (e && e.message || e);
   }
 
-  pause(on, silent) {
-    $('pause').classList.toggle('show', on);
-    if (!silent) this.onPause(on);
-    else this.onPause(true);
+  // the game menu (tabs: map, quests, stats, options) doubles as the pause screen
+  pause(on) {
+    if (on) this.openMenu(this.tab); else this.closeMenu();
+  }
+  openMenu(tab = this.tab) {
+    this.onPause(true);
+    $('menu').classList.add('show');
+    this.toggleQuestList(false);
+    this.showTab(tab);
+  }
+  closeMenu() {
+    $('menu').classList.remove('show');
+    this.onPause(false);
+  }
+  showTab(tab) {
+    this.tab = tab;
+    for (const b of document.querySelectorAll('#mtabs button')) b.classList.toggle('on', b.dataset.tab === tab);
+    for (const sec of document.querySelectorAll('.mtab')) sec.classList.toggle('show', sec.id === `tab-${tab}`);
+    if (tab === 'map') this.drawBigMap();
+    if (tab === 'quests') this.renderQuests();
+    if (tab === 'stats') this.renderStats();
+    this.sfx.play('talk');
   }
 
   // ---------------------------------------------------------------- HUD
@@ -418,20 +436,23 @@ export class UI {
     g.restore();
   }
 
-  // ---------------------------------------------------------------- big map
-  openMap() {
-    this.onPause(true);
-    $('mapScreen').classList.add('show');
+  // ---------------------------------------------------------------- big map (menu → Mapa)
+  openMap() { this.openMenu('map'); }
+  closeMap() { this.closeMenu(); }
+
+  drawBigMap() {
     const g = $('bigmap').getContext('2d');
     g.drawImage(this.mapImg, 0, 0, 1200, 840);
     const game = this.game;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const m of game.masks) {
       if (!m.got) continue;
       const [x, y] = this.toMap(m.x, m.z);
-      g.font = '26px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '24px serif';
       g.fillText('🎭', x, y);
     }
-    this.flagHits = [];
+    // flags (tap to travel)
+    this.hits = [];
     for (const f of game.flags) {
       const [x, y] = this.toMap(f.x, f.z);
       g.fillStyle = f.on ? '#e3342f' : 'rgba(80,80,80,.6)';
@@ -441,7 +462,41 @@ export class UI {
       if (f.on) {
         g.fillStyle = '#1e5bb8';
         g.beginPath(); g.moveTo(x, y - 30); g.lineTo(x + 9, y - 23); g.lineTo(x, y - 16); g.fill();
-        this.flagHits.push({ x, y: y - 16, f });
+        this.hits.push({ x, y: y - 16, flag: f });
+      }
+    }
+    // quests: a bubble for each one still to do (tap to follow it). The one you follow and the
+    // ones in progress get their names first; a name that would overlap another is left off.
+    const tracked = this.trackedQuestId();
+    const rank = q => (q.d.id === tracked ? 0 : q.status === 'active' ? 1 : 2);
+    const items = game.questLog().filter(q => q.status !== 'done')
+      .map(q => ({ q, o: this.questSpot(q) })).filter(it => it.o)
+      .sort((a, b) => rank(b.q) - rank(a.q)); // draw the important ones last (on top)
+    for (const { q, o } of items) {
+      const [x, y] = this.toMap(o.x, o.z);
+      const on = q.d.id === tracked;
+      g.lineWidth = 4; g.strokeStyle = '#1b2330';
+      g.fillStyle = on ? '#ffd23f' : q.status === 'active' ? '#7fd3e8' : '#ffffff';
+      g.beginPath();
+      if (on) { for (let i = 0; i < 10; i++) { const r = i % 2 ? 9 : 22, a = -Math.PI / 2 + i * Math.PI / 5; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); }
+      else g.arc(x, y, 15, 0, Math.PI * 2);
+      g.fill(); g.stroke();
+      g.fillStyle = '#1b2330'; g.font = 'bold 20px Trebuchet MS, sans-serif';
+      if (!on) g.fillText(q.status === 'active' ? '?' : '!', x, y + 1);
+      this.hits.push({ x, y, quest: q.d.id });
+    }
+    const taken = [];
+    g.font = 'bold 17px Trebuchet MS, sans-serif';
+    for (const { q, o } of items.slice().reverse()) {
+      const [x, y] = this.toMap(o.x, o.z);
+      const text = tr(q.d.name), w = g.measureText(text).width + 8, h = 20;
+      for (const dy of [30, -30, 48]) {
+        const r = { x0: x - w / 2, x1: x + w / 2, y0: y + dy - h / 2, y1: y + dy + h / 2 };
+        if (taken.some(t2 => r.x0 < t2.x1 && r.x1 > t2.x0 && r.y0 < t2.y1 && r.y1 > t2.y0)) continue;
+        taken.push(r);
+        g.lineWidth = 5; g.strokeStyle = 'rgba(255,255,255,.92)'; g.fillStyle = '#1b2330';
+        g.strokeText(text, x, y + dy); g.fillText(text, x, y + dy);
+        break;
       }
     }
     const p = game.player.pos;
@@ -456,33 +511,106 @@ export class UI {
       item.textContent = `${t(`shellRegion_${region.id}`)} ${region.got}/${region.total}`;
       progress.append(item);
     }
-    const list = $('maskList');
-    list.innerHTML = '';
-    game.masks.forEach((m, i) => {
-      const d = document.createElement('div');
-      d.className = m.got ? 'got' : '';
-      d.textContent = `${i + 1}. ${m.got ? tr(m.name) : t('unknown')}`;
-      list.append(d);
-    });
+  }
+
+  // where a quest's marker goes: its live objective while it runs, else where it starts
+  questSpot(q) {
+    const c = q.d.challenge;
+    if (q.status === 'active' && c) { const o = c.objective?.(); if (o) return o; }
+    return q.d.where?.();
+  }
+  trackedQuestId() {
+    const game = this.game;
+    if (game.trackIdx === 'pin') return game.pin?.id;
+    const c = game.challenges[game.trackIdx];
+    return c && game.questDefs.find(d => d.challenge === c)?.id;
   }
 
   mapClick(e) {
     const r = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width * 1200, y = (e.clientY - r.top) / r.height * 840;
     let best = null, bd = 60;
-    for (const h of this.flagHits || []) {
+    for (const h of this.hits || []) {
       const d = Math.hypot(h.x - x, h.y - y);
-      if (d < bd) { bd = d; best = h.f; }
+      if (d < bd) { bd = d; best = h; }
     }
-    if (best) {
-      this.closeMap();
-      this.onWarp(best.x, best.y + 0.5, best.z, best.face || 0);
-      this.sfx.play('checkpoint');
+    if (!best) return;
+    if (best.quest) { this.game.trackQuestId(best.quest); this.drawBigMap(); return; }
+    const f = best.flag;
+    this.closeMenu();
+    this.onWarp(f.x, f.y + 0.5, f.z, f.face || 0);
+    this.sfx.play('checkpoint');
+  }
+
+  // ---------------------------------------------------------------- quest log (menu → Misiones)
+  renderQuests() {
+    const box = $('questLog');
+    box.replaceChildren();
+    const log = this.game.questLog();
+    const tracked = this.trackedQuestId();
+    const P = this.game.player.pos;
+    const groups = [['active', t('qActive')], ['available', t('qAvailable')], ['done', t('qDone')]];
+    for (const [st, title] of groups) {
+      const list = log.filter(q => q.status === st);
+      if (!list.length) continue;
+      const h = document.createElement('div'); h.className = 'qsec'; h.textContent = `${title} · ${list.length}`;
+      box.append(h);
+      for (const q of list) {
+        const card = document.createElement('div');
+        card.className = `qcard ${st}${q.d.id === tracked ? ' tracked' : ''}`;
+        const name = document.createElement('b'); name.textContent = (q.d.id === tracked ? '⭐ ' : '') + tr(q.d.name);
+        const desc = document.createElement('div'); desc.className = 'qd'; desc.textContent = tr(q.d.desc);
+        const meta = document.createElement('div'); meta.className = 'qm';
+        const spot = st !== 'done' && this.questSpot(q);
+        const bits = [];
+        if (q.d.giver) bits.push(q.d.giver);
+        if (q.progress) bits.push(q.progress);
+        if (spot) bits.push(`${Math.round(Math.hypot(spot.x - P.x, spot.z - P.z) / 0.6)} m`);
+        if (st === 'done') bits.push('✅');
+        meta.textContent = bits.join(' · ');
+        card.append(name, desc, meta);
+        if (st !== 'done') {
+          const b = document.createElement('button'); b.type = 'button';
+          b.className = `pill ${q.d.id === tracked ? '' : 'primary'}`;
+          b.textContent = q.d.id === tracked ? t('qTracking') : t('qTrack');
+          b.onclick = () => { this.game.trackQuestId(q.d.id); this.renderQuests(); };
+          card.append(b);
+        }
+        box.append(card);
+      }
     }
   }
 
-  closeMap() {
-    $('mapScreen').classList.remove('show');
-    this.onPause(false);
+  // ---------------------------------------------------------------- collection (menu → Colección)
+  renderStats() {
+    const st = this.game.stats();
+    const box = $('statTiles');
+    box.replaceChildren();
+    const tile = (icon, label, value, frac) => {
+      const d = document.createElement('div'); d.className = 'stile';
+      const v = document.createElement('div'); v.className = 'sv'; v.textContent = `${icon} ${value}`;
+      const l = document.createElement('div'); l.className = 'sl'; l.textContent = label;
+      d.append(v, l);
+      if (frac != null) { const b = document.createElement('div'); b.className = 'sb'; const i = document.createElement('i'); i.style.width = `${Math.round(frac * 100)}%`; b.append(i); d.append(b); }
+      box.append(d);
+    };
+    const pair = ([a, b]) => [`${a}/${b}`, b ? a / b : 0];
+    tile('🎭', t('stMasks'), ...pair(st.masks));
+    tile('⭐', t('stQuests'), ...pair(st.quests));
+    tile('🐚', t('stShells'), ...pair(st.conchas));
+    tile('🪙', t('stCoins'), ...pair(st.coins));
+    tile('💰', t('stWallet'), st.wallet);
+    tile('🇵🇷', t('stFlags'), ...pair(st.flags));
+    tile('📦', t('stCrates'), ...pair(st.crates));
+    const m = Math.floor(st.time / 60);
+    tile('⏱️', t('stTime'), `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`);
+    const list = $('maskList');
+    list.replaceChildren();
+    this.game.masks.forEach((mk, i) => {
+      const d = document.createElement('div');
+      d.className = mk.got ? 'got' : '';
+      d.textContent = `${i + 1}. ${mk.got ? tr(mk.name) : t('unknown')}`;
+      list.append(d);
+    });
   }
 }

@@ -188,6 +188,7 @@ function frame() {
     cam.update(dt, player, inp, input.lastCamInput, now);
   } else if (state === 'pause') {
     if (inp.pausePressed) ui.pause(false);
+    else if (inp.mapPressed) ui.showTab('map');
   } else {
     // title: slow orbit around the boardwalk
     cam.yaw += dt * 0.08;

@@ -63,7 +63,7 @@ export class Game {
   constructor(o) {
     Object.assign(this, o);
     this.coins = []; this.conchas = []; this.masks = []; this.npcs = []; this.flags = [];
-    this.crates = []; this.spots = []; this.challenges = []; this.targets = [];
+    this.crates = []; this.spots = []; this.challenges = []; this.targets = []; this.questDefs = []; this.pin = null;
     // things the pava should home in on: each entry returns a list of {x, y, z}
     this.aimables = [() => this.crates.filter(c => !c.broken).map(c => ({ x: c.x, y: c.y + 0.5, z: c.z }))];
     this.player.aimTargets = () => this.aimables.flatMap(f => f());
@@ -210,6 +210,45 @@ export class Game {
 
   challenge(c) { this.challenges.push(c); return c; }
 
+  // ------------------------------------------------------------ quest log (the menu's Misiones tab)
+  // Each quest registers once: status() is 'hidden' | 'available' | 'active' | 'done', where() is
+  // who or where to go to start it, progress() is a short "3/5" and challenge links to its live
+  // objective so the log can track it.
+  quest(def) { this.questDefs.push(def); return def; }
+  questLog() {
+    return this.questDefs.map(d => ({ d, status: d.status(), progress: d.progress?.() || '' }))
+      .filter(q => q.status !== 'hidden');
+  }
+  // follow a quest from the log or the map: its live objective if it's running, else its start
+  trackQuestId(id) {
+    const d = this.questDefs.find(q => q.id === id);
+    if (!d) return;
+    const st = d.status();
+    const ci = d.challenge ? this.challenges.indexOf(d.challenge) : -1;
+    if (st === 'active' && ci >= 0 && d.challenge.objective?.()) { this.pin = null; this.trackIdx = ci; }
+    else if (st !== 'done') {
+      const w = d.where();
+      this.pin = { id, x: w.x, y: w.y, z: w.z, label: w.label || d.name };
+      this.trackIdx = 'pin';
+    }
+    this.sfx.play('talk');
+  }
+  stats() {
+    const got = a => a.filter(Boolean).length;
+    const log = this.questLog();
+    return {
+      masks: [got(this.masks.map(m => m.got)), this.masks.length],
+      conchas: [this.conchaTotal - this.conchas.filter(c => c.alive).length, this.conchaTotal],
+      coins: [this.coins.filter(c => !c.alive).length, this.coins.length],
+      wallet: this.wallet,
+      flags: [got(this.flags.map(f => f.on)), this.flags.length],
+      crates: [got(this.crates.map(c => c.broken)), this.crates.length],
+      quests: [log.filter(q => q.status === 'done').length, this.questDefs.length],
+      time: this.playTime,
+      shells: this.shellProgress(),
+    };
+  }
+
   // ------------------------------------------------------------ quest markers
   // "!" over people with a quest to start, "?" while it's running, "$" when the shop has something
   // you can afford; a bouncing marker + screen-edge arrow point at the current objective.
@@ -265,6 +304,12 @@ export class Game {
     // player can switch (tap the ⭐ label). A quest that just started gets tracked automatically.
     const objs = [];
     this.challenges.forEach((c, i) => { const o = c.objective?.(); if (o) objs.push({ i, o }); });
+    // a quest picked in the log that hasn't started yet: a waypoint to whoever gives it
+    if (this.pin) {
+      const d = this.questDefs.find(q => q.id === this.pin.id);
+      if (!d || d.status() !== 'available') { this.pin = null; if (this.trackIdx === 'pin') this.trackIdx = null; }
+      else objs.push({ i: 'pin', o: { x: this.pin.x, y: this.pin.y, z: this.pin.z, label: this.pin.label } });
+    }
     if (this.seenQuests) {
       for (const q of objs) {
         if (this.seenQuests.has(q.i) || q.o.idle) continue;

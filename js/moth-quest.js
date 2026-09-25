@@ -495,7 +495,7 @@ export function buildMothQuest(g, places) {
   };
   g.mask('moth', line('El regalo de Moth', "Moth's gift"), home.x, home.y + 1.8, home.z, true);
 
-  g.challenge({
+  const mothC = g.challenge({
     onLoad() {
       // the earlier version of this quest: finishing it counts
       if (!g.q.moth2 && g.q.moth >= 6) g.q.moth2 = 7;
@@ -533,4 +533,10 @@ export function buildMothQuest(g, places) {
       if (w && pel.visible) w.forEach((wing, i) => (wing.rotation.z = (i ? -1 : 1) * Math.sin(now * 9) * 0.6));
     },
   });
+
+  g.quest({ id: 'moth', name: line('Moth y el Churu', 'Moth and the Churu'), giver: 'Moth', challenge: mothC,
+    desc: line('Moth, la gata más malcriada del parque, exige cariños. Muchos. O un Churu.', 'Moth, the most spoiled cat in the park, demands pets. Lots of them. Or a Churu.'),
+    progress: () => (stage() >= 1 && stage() < 7 ? `${stage()}/6` : ''),
+    status: () => (stage() >= 7 ? 'done' : stage() >= 1 ? 'active' : 'available'),
+    where: () => ({ x: home.x, y: home.y, z: home.z, label: labels[0] }) });
 }
