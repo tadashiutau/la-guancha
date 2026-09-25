@@ -24,7 +24,7 @@ The repo root is the game itself, so GitHub Pages serves it directly (Settings â
 ./build.sh
 ```
 
-This creates `dist/` and `la-guancha.zip` (about 2 MB). You can upload either one to Netlify Drop, Cloudflare Pages, etc.
+This creates `dist/` and `la-guancha.zip` (about 5 MB). You can upload either one to Netlify Drop, Cloudflare Pages, etc.
 
 ### Put it on the home screen (full screen, like an app)
 
@@ -43,7 +43,7 @@ This creates `dist/` and `la-guancha.zip` (about 2 MB). You can upload either on
 | Talk | ðŸ’¬ button | F |
 | Map / pause | II button | M / Esc |
 
-Progress is saved in the browser automatically.
+Choose one of three save slots before playing and name your character. Progress is saved in the browser automatically. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
 
 ## How the level was made
 
@@ -52,7 +52,7 @@ Progress is saved in the browser automatically.
 - **OpenStreetMap** (Overpass): the boardwalk, kiosks, buildings, piers, roads, park, beach and breakwaters
 - **USGS 3DEP**: the 1 m bare-earth DEM, plus **LiDAR point clouds** (2024) used for tree positions and heights (1,642 trees) and building heights
 - **NOAA NCEI CUDEM** 2022 topobathy: real water depths for the basin (about 9 m deep), reef flat and open sea
-- **NAIP 2022** and **Esri World Imagery**: seabed tones, grass shading, roof colors and moored-boat detection
+- **NAIP 2022** and **Esri World Imagery**: aerial ground outside mapped areas, mini-map reference, roof colors and moored-boat detection. Roads, footpaths, parks, beach, wetlands and parking use crisp game surfaces over the imagery.
 
 Rebuilding the data:
 

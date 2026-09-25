@@ -93,6 +93,18 @@ export class Sfx {
     s.start(t);
   }
 
+  voice(who, ch) {
+    if (!this.ctx || this.muted || this.ctx.state !== 'running') return;
+    const now = this.ctx.currentTime;
+    if (now - (this.lastVoiceAt ?? -1) < 0.065) return;
+    this.lastVoiceAt = now;
+    let seed = 0;
+    for (const letter of who) seed = (seed * 31 + letter.codePointAt(0)) | 0;
+    const base = 290 + (Math.abs(seed) % 8) * 35;
+    const pitch = base * Math.pow(2, ((ch.codePointAt(0) % 7) - 3) / 24);
+    this.tone(pitch, 0.065, { type: seed & 1 ? 'triangle' : 'square', vol: 0.025, slide: 0.82, attack: 0.004 });
+  }
+
   play(name) {
     if (!this.ctx) return;
     switch (name) {

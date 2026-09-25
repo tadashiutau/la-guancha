@@ -27,13 +27,6 @@ export const FOOD_LINES = {
   'Chillo Frito': { es: 'Chillo frito entero con tostones. ¡Del mar a tu plato!', en: 'Whole fried snapper with tostones. Sea to plate!' },
   'Jugos': { es: 'Jugos naturales bien fríos: parcha, acerola, china.', en: 'Ice-cold fresh juices: passion fruit, acerola, orange.' },
 };
-// cold foods are "bien frío/a", fried ones are "calientito/a"
-export const FOOD_TEMP = {
-  'Piraguas': { es: 'bien fríitas', en: 'ice cold' }, 'Coco Frío': { es: 'bien fríito', en: 'ice cold' },
-  'Limber': { es: 'bien congelados', en: 'frozen solid' }, 'Jugos': { es: 'bien fríos', en: 'ice cold' },
-  'Mariscos': { es: 'fresquecitos', en: 'nice and fresh' },
-};
-
 const CHATTER = [
   { es: '¡Qué calor! Suerte que aquí en La Guancha siempre hay brisa.', en: "So hot! Lucky there's always a breeze here at La Guancha." },
   { es: 'Los domingos esto se llena de familias. ¡Y de música en la tarima!', en: 'On Sundays this fills up with families. And music on the stage!' },
@@ -41,7 +34,7 @@ const CHATTER = [
   { es: 'Los vejigantes de Ponce son de papel maché; los de Loíza, de coco.', en: "Ponce's vejigante masks are papier-mâché; Loíza's are made from coconuts." },
   { es: 'Cuidado con los pelícanos, que se roban el pescado de los pescadores.', en: 'Watch out for the pelicans, they steal the fishermen’s catch.' },
   { es: 'Desde la torre se ven los atardeceres más bonitos de Ponce.', en: 'The prettiest sunsets in Ponce are seen from the tower.' },
-  { es: 'El faro de Caja de Muertos es de 1887. Hay una lancha que te lleva.', en: 'The Caja de Muertos lighthouse is from 1887. There’s a ferry out there.' },
+  { es: 'El faro de Caja de Muertos es de 1887. Me encantaría verlo de cerca algún día.', en: "The Caja de Muertos lighthouse dates to 1887. I'd love to see it up close someday." },
   { es: '¿Tú eres el jíbaro que anda buscando máscaras? ¡Wepa!', en: 'Are you the jíbaro looking for masks? Wepa!' },
   { es: 'Mira cuántos sábalos hay debajo del tablado. ¡Son enormes!', en: 'Look how many tarpon there are under the boardwalk. They’re huge!' },
   { es: 'Yo vengo a caminar aquí todas las mañanas, antes de que caliente el sol.', en: 'I walk here every morning, before the sun gets hot.' },
@@ -89,7 +82,7 @@ export function buildCrowd(g, along, fromNorth, total) {
   const crowd = [];
 
   const say = n => async (g) => {
-    const lines = [];
+    const lines = [{ es: `¡Hola, ${g.playerName}!`, en: `Hi, ${g.playerName}!` }];
     if (n.lines) lines.push(...n.lines);
     else {
       lines.push(CHATTER[Math.floor(Math.random() * CHATTER.length)]);

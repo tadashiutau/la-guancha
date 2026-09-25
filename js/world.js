@@ -40,6 +40,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
 
   carveUnderBoardwalk(data, W.tablado.map(wpts));
   buildTerrain(scene, data);
+  buildRoutes(scene, data);
   const water = buildWater(scene, data);
   const sky = buildSky(scene);
 
@@ -691,10 +692,9 @@ function buildTerrain(scene, data) {
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeVertexNormals();
-  const tex = new THREE.Texture(data.colorImg);
+  const tex = new THREE.CanvasTexture(groundMap(data));
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
+  tex.anisotropy = 16;
   const m = new THREE.Mesh(g, detailMaterial(tex));
   m.receiveShadow = true;
   scene.add(m);
@@ -705,8 +705,79 @@ function buildTerrain(scene, data) {
   scene.add(far);
 }
 
-// Ground material: the stylized photo plus a fine tiling detail pattern (world-space) so the
-// ground still reads crisp right at the player's feet.
+// Keep the aerial image between mapped areas, and paint crisp land cover on defined polygons.
+function groundMap(data) {
+  const f = data.world.frame;
+  const c = document.createElement('canvas');
+  c.width = f.x1 - f.x0; c.height = f.y1 - f.y0;
+  const g = c.getContext('2d');
+  g.drawImage(data.colorImg, 0, 0, c.width, c.height);
+  const fill = (polys, color) => {
+    g.fillStyle = color;
+    for (const poly of polys) {
+      if (poly.length < 3) continue;
+      g.beginPath();
+      poly.forEach(([x, y], i) => i ? g.lineTo(x - f.x0, f.y1 - y) : g.moveTo(x - f.x0, f.y1 - y));
+      g.closePath(); g.fill();
+    }
+  };
+  fill(data.world.wetland, '#748867');
+  fill(data.world.park, '#75a65c');
+  fill(data.world.beach, '#dec797');
+  fill(data.world.parking, '#999997');
+  return c;
+}
+
+// Roads and footpaths are terrain-following ribbons with real geometry, so their edges stay sharp.
+function buildRoutes(scene, data) {
+  const H = data.terrainH;
+  const roads = data.world.roads.map(r => ({ pts: wpts(r.p), width: r.w * S }));
+  const paths = data.world.footways.map(p => ({ pts: wpts(p), width: 2.4 * S }));
+  const add = (routes, extra, lift, color) => {
+    const vertices = [];
+    const point = (x, z) => [x, H(x, z) + lift, z];
+    const tri = (a, b, c) => vertices.push(...a, ...b, ...c);
+    for (const { pts, width } of routes) {
+      const half = width / 2 + extra;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+        const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+        if (len < 0.01) continue;
+        const nx = -dz / len * half, nz = dx / len * half;
+        const steps = Math.ceil(len / 1.2);
+        for (let j = 0; j < steps; j++) {
+          const t0 = j / steps, t1 = (j + 1) / steps;
+          const x0 = ax + dx * t0, z0 = az + dz * t0;
+          const x1 = ax + dx * t1, z1 = az + dz * t1;
+          const a = point(x0 - nx, z0 - nz), b = point(x0 + nx, z0 + nz);
+          const c = point(x1 - nx, z1 - nz), d = point(x1 + nx, z1 + nz);
+          tri(a, b, c); tri(b, d, c);
+        }
+      }
+      // Rounded joins cover the seams between separately sampled road segments.
+      for (const [x, z] of pts) {
+        const mid = point(x, z);
+        for (let j = 0; j < 12; j++) {
+          const a = j / 12 * Math.PI * 2, b = (j + 1) / 12 * Math.PI * 2;
+          tri(mid, point(x + Math.cos(a) * half, z + Math.sin(a) * half),
+            point(x + Math.cos(b) * half, z + Math.sin(b) * half));
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }));
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  };
+  add(paths, 0.28 * S, 0.035, 0xb18e69);
+  add(paths, 0, 0.075, 0xd8b895);
+  add(roads, 0.65 * S, 0.12, 0xc9c4b6);
+  add(roads, 0, 0.2, 0x656c72);
+}
+
+// Tiled procedural detail gives grass, sand and paving definition close to the player.
 function detailMaterial(tex) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
@@ -715,13 +786,20 @@ function detailMaterial(tex) {
   let s = 7;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 128 * 128; i++) {
-    const v = 118 + r() * 20 + (r() < 0.06 ? 16 : 0);
+    const v = Math.max(20, Math.min(235, 70 + r() * 115 + (r() < 0.05 ? (r() < 0.5 ? -45 : 45) : 0)));
     img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
   }
   g.putImageData(img, 0, 0);
+  for (let i = 0; i < 900; i++) {
+    const x = r() * 128, y = r() * 128, length = 2 + r() * 5;
+    const v = r() < 0.5 ? 60 : 200;
+    g.strokeStyle = `rgba(${v},${v},${v},0.5)`;
+    g.lineWidth = 1 + r();
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y - length); g.stroke();
+  }
   const d = new THREE.CanvasTexture(c);
   d.wrapS = d.wrapT = THREE.RepeatWrapping;
-  d.anisotropy = 8;
+  d.anisotropy = 16;
   const mat = new THREE.MeshLambertMaterial({ map: tex });
   mat.onBeforeCompile = sh => {
     sh.uniforms.uDetail = { value: d };
@@ -731,9 +809,14 @@ function detailMaterial(tex) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform sampler2D uDetail; varying vec3 vWp;')
       .replace('#include <map_fragment>', `#include <map_fragment>
-        float dt = texture2D(uDetail, vWp.xz * 0.9).r * 0.6 + texture2D(uDetail, vWp.xz * 0.23).r * 0.4;
-        float fade = 1.0 - smoothstep(25.0, 80.0, length(vWp - cameraPosition));
-        diffuseColor.rgb *= mix(1.0, dt * 2.0, 0.55 * fade);`);
+        float broad = texture2D(uDetail, vWp.xz * 0.09).r;
+        float fine = texture2D(uDetail, vWp.xz * 0.38).r;
+        float grit = texture2D(uDetail, vWp.xz * 1.1).r;
+        float seabed = 1.0 - smoothstep(-0.6, 0.15, vWp.y);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.31, 0.26, 0.18), seabed);
+        float fade = 1.0 - smoothstep(20.0, 90.0, length(vWp - cameraPosition));
+        float grain = (broad - 0.5) * 0.5 + (fine - 0.5) * 0.3 + (grit - 0.5) * 0.18;
+        diffuseColor.rgb *= 1.0 + grain * fade * 0.85;`);
   };
   return mat;
 }

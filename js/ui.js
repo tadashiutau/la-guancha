@@ -1,19 +1,27 @@
 // HUD, dialogs, menus, mini-map and the big map.
 import { t, tr, getLang } from './i18n.js';
+import { SLOT_COUNT, readSave } from './saves.js';
 
 const $ = id => document.getElementById(id);
 
 export class UI {
   constructor(sfx) {
     this.sfx = sfx;
-    this.onPlay = this.onReset = this.onPause = this.onWarp = this.onLang = () => {};
+    this.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    this.onPlay = this.onPause = this.onWarp = this.onLang = this.onToSlots = () => {};
+    this.onSelectSlot = this.onCopySlot = this.onMoveSlot = this.onDeleteSlot = this.onName = () => {};
+    this.copyFrom = null;
+    this.transferMode = null;
     this.dlg = null;
     this.bannerT = 0; this.toastT = 0;
     $('bPlay').onclick = () => this.onPlay();
     $('bLang').onclick = $('bLang2').onclick = () => this.onLang();
-    $('bReset').onclick = () => $('confirm').classList.add('show');
-    $('bYes').onclick = () => { $('confirm').classList.remove('show'); this.onReset(); this.ready(false); };
-    $('bNo').onclick = () => $('confirm').classList.remove('show');
+    $('bSlotsBack').onclick = () => this.hideSlots();
+    $('bToSlots').onclick = () => this.onToSlots();
+    $('bNameGo').onclick = () => this.submitName();
+    $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.submitName(); });
+    $('bYes').onclick = () => { $('confirm').classList.remove('show'); this.confirmed?.(); this.confirmed = null; };
+    $('bNo').onclick = () => { $('confirm').classList.remove('show'); this.confirmed = null; };
     $('pauseBtn').addEventListener('pointerdown', e => { e.stopPropagation(); this.pause(true); });
     $('bResume').onclick = () => this.pause(false);
     $('bMap').onclick = () => { this.pause(false, true); this.openMap(); };
@@ -46,17 +54,82 @@ export class UI {
     $('ctrlText2').textContent = ctrl;
     $('bSound').textContent = `${t('sound')}: ${this.sfx.muted ? t('off') : t('on')}`;
     $('bMusic').textContent = `${t('music')}: ${this.sfx.musicOn ? t('on') : t('off')}`;
+    $('nameInput').placeholder = t('namePlaceholder');
+    $('nameInput').setAttribute('aria-label', t('namePlaceholder'));
+    if ($('saveScreen').classList.contains('show')) this.renderSlots();
     document.title = t('title');
   }
 
   progress(p) { $('loadbar').firstElementChild.style.width = (p * 100) + '%'; }
-  ready(hasSave) {
+  ready() {
     $('loadbar').style.display = 'none';
     $('titleBtns').style.display = 'flex';
-    $('bPlay').textContent = hasSave ? t('continue') : t('play');
-    $('bReset').style.display = hasSave ? '' : 'none';
+    $('bPlay').textContent = t('play');
   }
   hideTitle() { $('title').classList.remove('show'); }
+  showSlots() { this.copyFrom = this.transferMode = null; $('saveScreen').classList.add('show'); this.renderSlots(); }
+  hideSlots() { $('saveScreen').classList.remove('show'); this.copyFrom = this.transferMode = null; }
+
+  renderSlots() {
+    const box = $('saveSlots'); box.replaceChildren();
+    for (let slot = 1; slot <= SLOT_COUNT; slot++) {
+      const save = readSave(slot);
+      const card = document.createElement('div'); card.className = 'save-slot';
+      const title = document.createElement('strong'); title.textContent = `${t('slot')} ${slot} · ${save ? (save.name || t('unnamedSlot')) : t('emptySlot')}`;
+      card.append(title);
+      if (save) {
+        const info = document.createElement('p');
+        const minutes = Math.floor((save.time || 0) / 60);
+        info.textContent = `${(save.masks || []).length}/27 ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+        card.append(info);
+      }
+      const row = document.createElement('div'); row.className = 'row';
+      const button = (label, style, fn) => {
+        const b = document.createElement('button'); b.className = `pill ${style}`.trim();
+        b.type = 'button'; b.textContent = label; b.onclick = fn; row.append(b);
+      };
+      if (this.copyFrom == null) {
+        button(save ? t('openSlot') : t('emptySlot'), 'primary', () => this.onSelectSlot(slot));
+        if (save) {
+          button(t('copySlot'), '', () => { this.copyFrom = slot; this.transferMode = 'copy'; this.renderSlots(); });
+          button(t('moveSlot'), '', () => { this.copyFrom = slot; this.transferMode = 'move'; this.renderSlots(); });
+          button(t('deleteSlot'), 'pink', () => this.confirmAction(`${t('deleteSaveConfirm')} ${slot}?`, () => { this.onDeleteSlot(slot); this.renderSlots(); }));
+        }
+      } else if (this.copyFrom === slot) {
+        button(t('cancelCopy'), '', () => { this.copyFrom = this.transferMode = null; this.renderSlots(); });
+      } else {
+        const transfer = () => {
+          if (this.transferMode === 'move') this.onMoveSlot(this.copyFrom, slot);
+          else this.onCopySlot(this.copyFrom, slot);
+          this.copyFrom = this.transferMode = null;
+          this.renderSlots();
+        };
+        button(save ? t('replaceSlot') : this.transferMode === 'move' ? t('moveHere') : t('pasteSlot'), save ? 'pink' : 'primary',
+          () => save ? this.confirmAction(`${t('replaceSaveConfirm')} ${slot}?`, transfer) : transfer());
+      }
+      card.append(row); box.append(card);
+    }
+  }
+
+  confirmAction(message, action) {
+    $('confirmText').textContent = message;
+    this.confirmed = action;
+    $('confirm').classList.add('show');
+  }
+
+  promptName() {
+    $('nameInput').value = '';
+    $('nameError').textContent = '';
+    $('nameScreen').classList.add('show');
+    $('nameInput').focus();
+  }
+
+  submitName() {
+    const name = $('nameInput').value.trim().replace(/\s+/gu, ' ').slice(0, 20);
+    if (!name) { $('nameError').textContent = t('nameRequired'); return; }
+    $('nameScreen').classList.remove('show');
+    this.onName(name);
+  }
   error(e) {
     $('loadbar').style.display = 'none';
     $('ctrlText').textContent = 'Error: ' + (e && e.message || e);
@@ -152,13 +225,60 @@ export class UI {
 
   showLine() {
     const d = this.dlg;
+    clearTimeout(this.typeTimer);
     const txt = tr(d.lines[d.i]);
     const el = $('dlgText');
     el.innerHTML = '';
+    el.classList.remove('done');
     if (d.who) { const b = document.createElement('b'); b.textContent = tr(d.who) + ': '; el.append(b); }
-    el.append(txt);
+    const accessible = document.createElement('span');
+    accessible.className = 'sr-only';
+    accessible.textContent = txt;
+    el.append(accessible);
+    const words = document.createElement('span');
+    words.className = 'dlg-letters';
+    words.setAttribute('aria-hidden', 'true');
+    el.append(words);
+    d.chars = [];
+    for (const part of txt.match(/\S+|\s+/gu) || []) {
+      if (/^\s+$/u.test(part)) { words.append(document.createTextNode(part)); continue; }
+      const word = document.createElement('span');
+      word.className = 'dlg-word';
+      for (const ch of Array.from(part)) {
+        const letter = document.createElement('span');
+        letter.className = 'dlg-char';
+        letter.textContent = ch;
+        word.append(letter);
+        d.chars.push({ letter, ch });
+      }
+      words.append(word);
+    }
+    d.at = 0;
+    d.typing = !this.reducedMotion.matches && d.chars.length > 0;
     const opts = $('dlgOpts');
     opts.innerHTML = '';
+    $('dlgNext').style.display = 'none';
+    if (d.typing) this.typeTimer = setTimeout(() => this.typeNext(d), 25);
+    else this.finishLine(true);
+  }
+
+  typeNext(d) {
+    if (this.dlg !== d || !d.typing) return;
+    const { letter, ch } = d.chars[d.at++];
+    letter.classList.add('shown');
+    if (/[\p{L}\p{N}]/u.test(ch)) this.sfx.voice(tr(d.who || ''), ch);
+    if (d.at === d.chars.length) { this.finishLine(); return; }
+    const delay = /[.!?…]/u.test(ch) ? 170 : /[,;:]/u.test(ch) ? 90 : 34;
+    this.typeTimer = setTimeout(() => this.typeNext(d), delay);
+  }
+
+  finishLine(revealRemaining = false) {
+    const d = this.dlg;
+    if (!d) return;
+    clearTimeout(this.typeTimer);
+    d.typing = false;
+    if (revealRemaining) $('dlgText').classList.add('done');
+    const opts = $('dlgOpts');
     const last = d.i === d.lines.length - 1;
     if (last && d.options) {
       for (const o of d.options) {
@@ -171,12 +291,12 @@ export class UI {
       }
       $('dlgNext').style.display = 'none';
     } else $('dlgNext').style.display = '';
-    this.sfx.play('talk');
   }
 
   advance() {
     const d = this.dlg;
     if (!d) return;
+    if (d.typing) { this.finishLine(true); return; }
     if (d.i < d.lines.length - 1) { d.i++; this.showLine(); return; }
     if (d.options) return; // must pick one
     this.close(null);
@@ -185,6 +305,7 @@ export class UI {
   close(v) {
     const d = this.dlg;
     if (!d) return;
+    clearTimeout(this.typeTimer);
     this.dlg = null;
     $('dialog').classList.remove('show');
     d.res(v);

@@ -9,6 +9,7 @@ import { Sfx } from './audio.js';
 import { Game } from './game.js';
 import { UI } from './ui.js';
 import { t, getLang, setLang } from './i18n.js';
+import { migrateSave, copySave, moveSave, deleteSave } from './saves.js';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -53,6 +54,7 @@ try { sfx.setMuted(localStorage.getItem('guancha.muted') === '1'); } catch (e) {
 const input = new Input(document.body);
 const ui = new UI(sfx);
 ui.applyLang();
+migrateSave();
 
 let data, phys, world, player, cam, game;
 let state = 'loading';
@@ -75,11 +77,16 @@ async function boot() {
   game = new Game({ scene, phys, world, player, sfx, ui, data, cam, input });
   lap('game');
   ui.attach(game, data);
-  game.load();
   game.spawn();
   cam.snap(player);
   ui.progress(1);
-  ui.ready(game.hasSave());
+  ui.ready();
+  try {
+    if (sessionStorage.getItem('guancha.openSlots') === '1') {
+      sessionStorage.removeItem('guancha.openSlots');
+      ui.showSlots();
+    }
+  } catch (e) { /* storage unavailable */ }
   lap('ready');
   if (DEBUG) {
     window.G = { game, player, phys, world, scene, camera, THREE, cam, renderer };
@@ -101,13 +108,31 @@ async function boot() {
   renderer.render(scene, camera);
 }
 
-ui.onPlay = () => {
+const startGame = () => {
   sfx.start();
   state = 'play';
+  ui.hideSlots();
   ui.hideTitle();
   game.startPlaying();
 };
-ui.onReset = () => { game.reset(); };
+ui.onPlay = () => ui.showSlots();
+ui.onSelectSlot = slot => {
+  game.load(slot);
+  game.spawn();
+  cam.snap(player);
+  ui.hideSlots();
+  if (!game.playerName) ui.promptName();
+  else startGame();
+};
+ui.onName = name => { game.playerName = name; game.save(); startGame(); };
+ui.onCopySlot = (from, to) => copySave(from, to);
+ui.onMoveSlot = (from, to) => moveSave(from, to);
+ui.onDeleteSlot = slot => deleteSave(slot);
+ui.onToSlots = () => {
+  game.save();
+  try { sessionStorage.setItem('guancha.openSlots', '1'); } catch (e) { /* ignore */ }
+  location.reload();
+};
 ui.onPause = on => { state = on ? 'pause' : 'play'; input.release(); };
 ui.onWarp = (x, y, z, face) => { player.teleport(x, y, z, face); cam.snap(player); };
 ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); game?.onLang(); };

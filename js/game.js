@@ -4,8 +4,8 @@ import { S } from './data.js';
 import { t, tr } from './i18n.js';
 import * as M from './models.js';
 import { defineLevel } from './level.js';
+import { readSave, writeSave } from './saves.js';
 
-const SAVE_KEY = 'guancha.save.v1';
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const posKey = o => `${Math.round(o.x)}:${Math.round(o.y)}:${Math.round(o.z)}`;
@@ -73,6 +73,8 @@ export class Game {
     this.talking = false;
     this.timerState = null;
     this.playTime = 0;
+    this.slot = 0;
+    this.playerName = '';
     this.fx = new Particles(this.scene);
     this.waves = [];
     for (let i = 0; i < 4; i++) {
@@ -261,12 +263,10 @@ export class Game {
   }
 
   // ------------------------------------------------------------ save / load
-  hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
-
   // Saves identify things by id or by rounded position (not list order), so saves keep working
   // when an update adds or moves coins, shells, crates or spots.
   save() {
-    if (this.loading) return;
+    if (this.loading || !this.slot) return;
     const keys = a => a.filter(o => !o.alive || o.broken || o.used).map(posKey);
     const s = {
       v: 2, wallet: this.wallet,
@@ -277,14 +277,14 @@ export class Game {
       crates: keys(this.crates.filter(c => c.broken)),
       spots: keys(this.spots.filter(c => c.used)),
       q: this.q, rv: this.revealed, shop: this.shop, look: this.player.look, time: Math.round(this.playTime),
-      last: this.lastFlag,
+      last: this.lastFlag, name: this.playerName,
     };
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) { /* storage unavailable */ }
+    writeSave(this.slot, s);
   }
 
-  load() {
-    let s = null;
-    try { s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { s = null; }
+  load(slot) {
+    this.slot = slot;
+    const s = readSave(slot);
     if (!s) { this.refreshAll(); return; }
     this.loading = true;
     this.wallet = s.wallet || 0;
@@ -304,6 +304,7 @@ export class Game {
     this.q = s.q || {};
     this.shop = s.shop || {};
     this.playTime = s.time || 0;
+    this.playerName = s.name || '';
     this.lastFlag = s.last;
     for (const [id, p] of Object.entries(s.rv || {})) this.reveal(id, ...p, false);
     for (const id of s.masks || []) { const m = this.maskById(id); if (m) { m.got = true; m.group.visible = false; } }
@@ -313,11 +314,6 @@ export class Game {
     this.loading = false;
     this.refreshAll();
     this.save(); // upgrade old saves to the current format
-  }
-
-  reset() {
-    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
-    location.reload();
   }
 
   refreshAll() {
@@ -388,18 +384,6 @@ export class Game {
     const P = this.player.pos;
     const col = this.player.groundCol;
     if (col && col.tag === 'crate' && col.data) this.breakCrate(col.data);
-    // underwater coins twinkle so they're easy to spot from the surface
-    if ((this.twinkleT = (this.twinkleT || 0) - dt) < 0) {
-      this.twinkleT = 0.08;
-      const P = this.player.pos;
-      for (let tries = 0; tries < 6; tries++) {
-        const c = this.coins[(Math.random() * this.coins.length) | 0];
-        if (c && c.alive && c.y < 0 && Math.hypot(c.x - P.x, c.z - P.z) < 30) {
-          this.fx.emit(c.x, c.y + 0.3, c.z, 1, { color: 0xffe08a, speed: 0.1, up: 0.5, life: 0.6, grav: 0 });
-          break;
-        }
-      }
-    }
     for (const s of this.spots) {
       if (s.used) continue;
       if (Math.hypot(s.x - P.x, s.z - P.z) < 1.8 && Math.abs(s.y - P.y) < 1.5) this.useSpot(s);
