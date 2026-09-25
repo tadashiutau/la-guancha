@@ -6,7 +6,8 @@ import { t, tr } from './i18n.js';
 import * as M from './models.js';
 import { Batch, P, rng } from './geo.js';
 import { buildProps } from './props.js';
-import { buildCrowd, FOOD_TEMP } from './npcs.js';
+import { buildCrowd, FOOD_LINES } from './npcs.js';
+import { buildMothQuest } from './moth-quest.js';
 
 const L = (x, y) => [x * S, -y * S];
 const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -164,7 +165,7 @@ export function defineLevel(g) {
 
   // ================================================================= MASKS (hidden until earned)
   const hidden = (id, es, en) => g.mask(id, { es, en }, 0, -50, 0, true);
-  hidden('tienda', 'Regalo de la tienda de Doña Carmen', "Doña Carmen's shop");
+  hidden('tienda', 'Máscara de la tienda de Doña Carmen', "A mask from Doña Carmen's shop");
   hidden('carrera', 'Carrera con Tito', 'Race with Tito');
   hidden('aros', 'Los aros de la playa', 'The beach rings');
   hidden('cocos', 'Tumba los cocos', 'Knock down the coconuts');
@@ -206,7 +207,8 @@ export function defineLevel(g) {
   const sfl = Math.hypot(sf.nx, sf.nz) || 1;
   const carmen = g.npc('carmen', 'Doña Carmen', sf.x + sf.nx / sfl * 0.9, sf.z + sf.nz / sfl * 0.9, Math.atan2(sf.nx, sf.nz), async (g) => {
     const lines = [
-      { es: `¡Bienvenido a mi kiosko! Hoy tengo ${shopK.food.toLowerCase()} ${(FOOD_TEMP[shopK.food] || { es: 'bien calientitos' }).es}.`, en: `Welcome to my kiosk! Today's ${shopK.food} are ${(FOOD_TEMP[shopK.food] || { en: 'nice and hot' }).en}.` },
+      { es: `¡Bienvenido a mi kiosko, ${g.playerName}!`, en: `Welcome to my kiosk, ${g.playerName}!` },
+      FOOD_LINES[shopK.food] || { es: `Hoy tengo ${shopK.food.toLowerCase()}.`, en: `Today I have ${shopK.food}.` },
       { es: '¿Qué te llevas, mijo?', en: 'What will it be, dear?' },
     ];
     const opts = [];
@@ -238,8 +240,9 @@ export function defineLevel(g) {
   const tomas = g.npc('guia', 'Don Tomás', ent.x + Math.cos(entFace) * 2.2, ent.z - Math.sin(entFace) * 2.2, entFace + Math.PI, async (g) => {
     const got = g.masks.filter(m => m.got).length;
     g.q.tomas = true;
+    g.save();
     await g.ui.say('Don Tomás', [
-      { es: '¡Saludos, jíbaro! Bienvenido al Paseo Tablado La Guancha, en Ponce.', en: 'Greetings, jíbaro! Welcome to the La Guancha boardwalk in Ponce.' },
+      { es: `¡Saludos, ${g.playerName}! Bienvenido al Paseo Tablado La Guancha, en Ponce.`, en: `Greetings, ${g.playerName}! Welcome to the La Guancha boardwalk in Ponce.` },
       { es: `Por todo el área hay ${g.masks.length} máscaras de vejigante escondidas. Llevas ${got}.`, en: `There are ${g.masks.length} vejigante masks hidden around here. You have ${got}.` },
       { es: 'Salta tres veces seguidas corriendo para el triple salto. ¡Y tírale la pava a las cosas!', en: 'Jump three times in a row while running for a triple jump. And throw your pava at things!' },
       { es: 'Toca las banderas de Puerto Rico. Desde el mapa puedes viajar a cualquiera que hayas tocado.', en: 'Touch the Puerto Rico flags. From the map you can travel to any flag you have touched.' },
@@ -267,7 +270,7 @@ export function defineLevel(g) {
     if (g.q.race) return g.ui.say('Tito', [{ es: '¡Tú eres más rápido que un coquí con prisa! Revancha otro día.', en: "You're faster than a coquí in a hurry! Rematch another day." }]);
     if (race.active) return g.ui.say('Tito', [{ es: '¡Corre! ¡A la cima de la torre!', en: 'Run! To the top of the tower!' }]);
     const v = await g.ui.say('Tito', [
-      { es: '¡Oye! Yo corro por este tablado todas las mañanas.', en: 'Hey! I run this boardwalk every morning.' },
+      { es: `¡Oye, ${g.playerName}! Yo corro por este tablado todas las mañanas.`, en: `Hey, ${g.playerName}! I run this boardwalk every morning.` },
       { es: '¿Una carrera hasta la cima de la torre, al otro lado? Tienes 55 segundos.', en: 'Race you to the top of the tower at the other end? You get 55 seconds.' },
     ], [{ label: { es: '¡Dale!', en: "Let's go!" }, value: 'y', primary: true }, { label: { es: 'Ahora no', en: 'Not now' }, value: 'n' }]);
     if (v === 'y') {
@@ -401,21 +404,26 @@ export function defineLevel(g) {
     if (kit.state === 'follow' && dist2(kitten.position.x, kitten.position.z, gabi.x, gabi.z) < 5) {
       kit.state = 'home';
       g.q.kitten = true;
+      delete g.q.kittenFollowing;
       kitten.position.set(gabi.x + 0.8, gabi.y, gabi.z + 0.3);
       g.sfx.play('meow');
-      await g.ui.say('Gabi', [{ es: '¡¡Mishu!! ¡La encontraste! ¡Muchas gracias! Toma, esto es para ti.', en: 'Mishu!! You found her! Thank you so much! Here, this is for you.' }]);
+      await g.ui.say('Gabi', [{ es: `¡¡Mishu!! ¡La encontraste, ${g.playerName}! ¡Muchas gracias! Toma, esto es para ti.`, en: `Mishu!! You found her, ${g.playerName}! Thank you so much! Here, this is for you.` }]);
       const P = g.player.pos;
       g.reveal('gatito', P.x, P.y + 1.8, P.z);
       return;
     }
     g.q.kittenAsked = true;
+    g.save();
     await g.ui.say('Gabi', [
       { es: 'Buaa… Perdí a mi gatita Mishu. Es anaranjada y muy traviesa.', en: 'Waah… I lost my kitten Mishu. She is orange and very naughty.' },
       { es: 'Creo que se escondió entre los carros del estacionamiento grande, cerca del tablado.', en: 'I think she hid between the cars in the big parking lot near the boardwalk.' },
     ]);
   });
   g.challenge({
-    onLoad() { if (g.q.kitten) { kit.state = 'home'; kitten.position.set(gabi.x + 0.8, gabi.y, gabi.z + 0.3); } },
+    onLoad() {
+      if (g.q.kitten) { kit.state = 'home'; kitten.position.set(gabi.x + 0.8, gabi.y, gabi.z + 0.3); }
+      else if (g.q.kittenFollowing) kit.state = 'follow';
+    },
     objective() {
       if (kit.state === 'follow') return { x: gabi.x, y: gabi.y, z: gabi.z, label: { es: 'Lleva a Mishu donde Gabi', en: 'Take Mishu to Gabi' } };
       if (kit.state === 'lost' && g.q.kittenAsked) return { x: kitten.position.x, y: kitten.position.y, z: kitten.position.z, label: { es: 'Busca a Mishu', en: 'Find Mishu' } };
@@ -424,7 +432,7 @@ export function defineLevel(g) {
     update(dt) {
       const P = g.player.pos;
       if (kit.state === 'lost' && dist2(P.x, P.z, kitten.position.x, kitten.position.z) < 1.4) {
-        kit.state = 'follow'; g.sfx.play('meow');
+        kit.state = 'follow'; g.q.kittenFollowing = true; g.save(); g.sfx.play('meow');
         g.ui.toast(tr({ es: '¡Mishu te sigue! Llévala donde Gabi en el parque.', en: 'Mishu follows you! Take her to Gabi in the park.' }), 3);
       }
       if (kit.state === 'follow') {
@@ -608,7 +616,7 @@ export function defineLevel(g) {
   });
 
   const yari = g.npc('lifeguard', 'Yari', lgx + 2.5, lgz + 1.5, -0.5, async (g) => g.ui.say('Yari', [
-    { es: '¡Hola! Soy la salvavidas. Desde mi caseta se ve todo el arrecife.', en: "Hi! I'm the lifeguard. You can see the whole reef from my tower." },
+    { es: `¡Hola, ${g.playerName}! Soy la salvavidas. Desde mi caseta se ve todo el arrecife.`, en: `Hi, ${g.playerName}! I'm the lifeguard. You can see the whole reef from my tower.` },
     { es: 'Un truco: agáchate (⤓) y salta sin moverte para dar un salto mortal bien alto.', en: 'A trick: crouch (⤓) and jump while standing still for a really high backflip.' },
     { es: 'Y si pasas por el aro verde de la arena, empieza la carrera de aros. ¡Rápido!', en: 'And if you go through the green ring on the sand, the ring race starts. Hurry!' },
   ]));
@@ -757,7 +765,47 @@ export function defineLevel(g) {
 
   yari.quest = g => (g.q.rings || g.q.yari ? null : 'available');
   const yariTalk = yari.talk;
-  yari.talk = async g => { g.q.yari = true; await yariTalk(g); };
+  yari.talk = async g => { g.q.yari = true; g.save(); await yariTalk(g); };
+
+  // A clear starting marker in the park leads through five spooky, talkable clues.
+  // Moth's box goes on open grass near the park flag: off paths and roads, clear of coins and people
+  const lanes = [...data.world.footways.map(w => ({ p: w.map(([x, y]) => L(x, y)), w: 1.8 })),
+    ...data.world.roads.map(r => ({ p: r.p.map(([x, y]) => L(x, y)), w: r.w * S / 2 + 1.5 }))];
+  const onLane = (x, z) => lanes.some(({ p, w }) => p.some((q, i) => {
+    if (i === 0) return false;
+    const [ax, az] = p[i - 1], ex = q[0] - ax, ez = q[1] - az, l2 = ex * ex + ez * ez || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2));
+    return Math.hypot(x - ax - ex * t, z - az - ez * t) < w;
+  }));
+  // Every Moth clue needs open footing: nothing overhead or around it (no canopy, roof or kiosk),
+  // off paths and roads, and clear of coins and people. Pawprints may sit on the boardwalk deck.
+  const mothOpen = (x, z, deck = false) => {
+    const cols = phys.near(x, z, 1.2).filter(c => c.maxx > x - 0.9 && c.minx < x + 0.9 && c.maxz > z - 0.9 && c.minz < z + 0.9);
+    if (deck ? !cols.length || cols.some(c => c.tag !== 'deck') || Math.abs(top(x, z) - deckY) > 0.4
+      : cols.length || H(x, z) < 0.3 || onLane(x, z)) return false;
+    return !g.coins.some(c => dist2(c.x, c.z, x, z) < 2) && !g.npcs.some(n => dist2(n.x, n.z, x, z) < 2.5)
+      && !g.flags.some(f => dist2(f.x, f.z, x, z) < 3);
+  };
+  const mothSpot = (cx, cz, deck = false) => {
+    for (let r = 0; r < 40; r += 0.5) for (let k = 0, n = Math.max(1, Math.round(r * 5)); k < n; k++) {
+      const an = k / n * Math.PI * 2 + r;
+      const x = cx + Math.cos(an) * r, z = cz + Math.sin(an) * r;
+      if (mothOpen(x, z, deck)) return { x, z };
+    }
+    return { x: cx, z: cz };
+  };
+  const mothPark = mothSpot(pkx + 4, pkz + 4);
+  const kioskWalk = along(fromNorth(0.38), 0);
+  const mothKiosk = mothSpot(kioskWalk.x, kioskWalk.z, true);
+  // the "eyes" wait beside a real mangrove, on firm ground
+  const nearKiosk = along(fromNorth(0.78), -4);
+  const mangroves = (world.info.foliageTrees || []).filter(t => t.pieces[0]?.kind === 'mangrove');
+  const mg = mangroves.sort((a, b) => dist2(a.x, a.z, nearKiosk.x, nearKiosk.z) - dist2(b.x, b.z, nearKiosk.x, nearKiosk.z))[0];
+  const mothMangrove = mg ? mothSpot(mg.x, mg.z) : mothSpot(nearKiosk.x, nearKiosk.z);
+  const mothTower = mothSpot(tfx + 4, tfz - 3);
+  const mothBeach = mothSpot(bfx + 5, bfz + 4);
+  buildMothQuest(g, { top, park: mothPark, kiosks: mothKiosk, tower: mothTower,
+    beach: mothBeach, mangrove: mothMangrove });
 
   buildProps(g, props);
   buildCrowd(g, along, fromNorth, total);

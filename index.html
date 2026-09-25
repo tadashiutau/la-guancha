@@ -65,12 +65,33 @@
   #title .card { text-align: center; background: rgba(255,250,240,.94); }
   #title h1 { margin: 6px 0 2px; font-size: clamp(30px, 8vw, 50px); color: #b33a2a; font-family: Georgia, serif; line-height: 1.05; text-shadow: 0 3px 0 #f7c948; }
   #title p { margin: 0 0 8px; font-weight: 700; color: #2d6a4c; }
+  #saveScreen .card { max-width: 680px; }
+  .save-slot { border: 3px solid #2d6a4c; border-radius: 16px; background: #fff; padding: 10px 14px; margin-top: 10px; }
+  .save-slot strong { font-size: 19px; color: #b33a2a; }
+  .save-slot.bad { border-color: #b33a2a; background: #fff1ec; }
+  .save-slot p { margin: 4px 0; font-size: 14px; }
+  .save-slot .row { margin-top: 7px; }
+  .save-slot .pill { min-height: 42px; font-size: 14px; }
+  #nameInput { width: 100%; padding: 12px 14px; border: 3px solid #2d6a4c; border-radius: 12px; font: inherit; font-size: 20px; user-select: text; -webkit-user-select: text; }
+  #nameError { color: #b33a2a; min-height: 1.5em; }
+  #shellProgress { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin-top: 6px; }
+  #shellProgress div { padding: 7px 9px; border-radius: 10px; background: #f3ead7; font-size: 14px; font-weight: 800; }
+  #shellProgress div.done { background: #ffe39a; }
   #loadbar { height: 12px; background: #e6dcc6; border-radius: 8px; overflow: hidden; margin: 12px 0; }
   #loadbar div { height: 100%; width: 0; background: #2d6a4c; transition: width .2s; }
-  #dialog { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); width: min(94vw, 620px); background: #fffaf0; color: var(--ink); border: 4px solid var(--ink); border-radius: 20px; padding: 14px 18px 12px; display: none; z-index: 8; font-size: 18px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+  #dialog { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); width: min(94vw, 620px); background: linear-gradient(170deg, #fffdf4, #fff2d9); color: var(--ink); border: 4px solid #2d6a4c; border-radius: 22px; padding: 16px 20px 12px; display: none; z-index: 8; font-size: 18px; box-shadow: 0 7px 0 #173b35, 0 14px 25px rgba(0,0,0,.35); }
   #dialog.show { display: block; }
-  #dialog b { color: #b33a2a; }
-  #dialog .next { text-align: right; font-size: 14px; opacity: .6; }
+  #dlgText { min-height: 3em; line-height: 1.45; }
+  #dialog b { color: #b33a2a; font-weight: 900; }
+  #dialog .next { text-align: right; font-size: 14px; color: #2d6a4c; animation: dlg-next 800ms ease-in-out infinite alternate; }
+  .dlg-word { display: inline-block; white-space: nowrap; }
+  .dlg-char { display: inline-block; opacity: 0; transform: translateY(.35em) scale(.6); }
+  .dlg-char.shown { animation: dlg-pop 180ms cubic-bezier(.2, 1.8, .5, 1) both; }
+  #dlgText.done .dlg-char { opacity: 1; transform: none; animation: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  @keyframes dlg-pop { 0% { opacity: 0; transform: translateY(.35em) scale(.6); } 70% { opacity: 1; transform: translateY(-.12em) scale(1.12); } 100% { opacity: 1; transform: none; } }
+  @keyframes dlg-next { to { transform: translateY(3px); } }
+  @media (prefers-reduced-motion: reduce) { .dlg-char.shown, #dialog .next { animation: none; opacity: 1; transform: none; } }
   #mapWrap { position: relative; width: 100%; aspect-ratio: 1200 / 840; border-radius: 14px; overflow: hidden; border: 3px solid var(--ink); background: #1b6fa3; }
   #mapWrap canvas { width: 100%; height: 100%; display: block; }
   #maskList { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; font-size: 14px; }
@@ -112,7 +133,7 @@
 </div>
 <button id="bTalk" data-btn="talk">💬 <span data-t="talk">Hablar</span></button>
 
-<div id="dialog"><div id="dlgText"></div><div id="dlgOpts" class="row"></div><div class="next" id="dlgNext">▼</div></div>
+<div id="dialog"><div id="dlgText" role="status" aria-live="polite"></div><div id="dlgOpts" class="row"></div><div class="next" id="dlgNext">▼</div></div>
 
 <div id="title" class="screen show">
   <div class="card">
@@ -125,9 +146,26 @@
     </div>
     <div class="row">
       <button class="pill" id="bLang" data-t="language">English</button>
-      <button class="pill" id="bReset" data-t="newGame" style="display:none">Empezar de nuevo</button>
     </div>
     <pre class="ctrl" id="ctrlText"></pre>
+  </div>
+</div>
+
+<div id="saveScreen" class="screen">
+  <div class="card">
+    <h2 data-t="chooseSave">Elige una partida</h2>
+    <div id="saveSlots"></div>
+    <div class="row"><button class="pill" id="bSlotsBack" data-t="back">Volver</button></div>
+  </div>
+</div>
+
+<div id="nameScreen" class="screen">
+  <div class="card">
+    <h2 data-t="nameTitle">¿Cómo te llamas?</h2>
+    <p data-t="nameHelp">Los personajes te llamarán por este nombre.</p>
+    <input id="nameInput" maxlength="20" autocomplete="nickname" aria-label="Nombre" />
+    <p id="nameError" role="alert"></p>
+    <div class="row"><button class="pill primary" id="bNameGo" data-t="begin">¡Empezar!</button></div>
   </div>
 </div>
 
@@ -137,6 +175,7 @@
     <div class="row">
       <button class="pill primary" id="bResume" data-t="resume">Seguir jugando</button>
       <button class="pill" id="bMap" data-t="map">Mapa</button>
+      <button class="pill" id="bToSlots" data-t="saveSlots">Partidas</button>
     </div>
     <div class="row">
       <button class="pill" id="bLang2" data-t="language">English</button>
@@ -152,14 +191,16 @@
 <div id="mapScreen" class="screen">
   <div class="card" style="max-width:900px">
     <h2><span data-t="map">Mapa</span> · <small style="font-size:15px" data-t="warp">Toca una bandera para viajar</small></h2>
-    <div id="mapWrap"><canvas id="bigmap" width="1200" height="840"></canvas></div>
+    <h2 style="margin:12px 0 0;font-size:20px" data-t="shellAreas">Conchas por zona</h2>
+    <div id="shellProgress"></div>
+    <div id="mapWrap" style="margin-top:12px"><canvas id="bigmap" width="1200" height="840"></canvas></div>
     <div id="maskList"></div>
     <div class="row"><button class="pill primary" id="bMapClose" data-t="close">Cerrar</button></div>
   </div>
 </div>
 
 <div id="confirm" class="screen">
-  <div class="card"><h2 data-t="confirmReset">¿Seguro?</h2>
+  <div class="card"><h2 id="confirmText">¿Seguro?</h2>
     <div class="row"><button class="pill pink" id="bYes" data-t="yes">Sí</button><button class="pill primary" id="bNo" data-t="no">No</button></div>
   </div>
 </div>

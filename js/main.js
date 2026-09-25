@@ -7,8 +7,11 @@ import { FollowCam } from './camera.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
 import { Game } from './game.js';
+import { loadIslandModels, loadMothModel } from './model-assets.js';
 import { UI } from './ui.js';
+import { FreeCam } from './freecam.js';
 import { t, getLang, setLang } from './i18n.js';
+import { migrateSave, copySave, moveSave, deleteSave, markBad } from './saves.js';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -53,8 +56,9 @@ try { sfx.setMuted(localStorage.getItem('guancha.muted') === '1'); } catch (e) {
 const input = new Input(document.body);
 const ui = new UI(sfx);
 ui.applyLang();
+migrateSave();
 
-let data, phys, world, player, cam, game;
+let data, phys, world, player, cam, game, freecam;
 let state = 'loading';
 
 async function boot() {
@@ -62,6 +66,9 @@ async function boot() {
   data = await loadData(p => ui.progress(p));
   lap('data');
   ui.progress(0.5);
+  await loadIslandModels();
+  await loadMothModel();
+  lap('models');
   await new Promise(r => setTimeout(r, 30));
   phys = new Physics();
   world = buildWorld(scene, data, phys, { mobile });
@@ -75,14 +82,21 @@ async function boot() {
   game = new Game({ scene, phys, world, player, sfx, ui, data, cam, input });
   lap('game');
   ui.attach(game, data);
-  game.load();
   game.spawn();
   cam.snap(player);
   ui.progress(1);
-  ui.ready(game.hasSave());
+  ui.ready();
+  try {
+    if (sessionStorage.getItem('guancha.openSlots') === '1') {
+      sessionStorage.removeItem('guancha.openSlots');
+      ui.showSlots();
+    }
+  } catch (e) { /* storage unavailable */ }
   lap('ready');
   if (DEBUG) {
-    window.G = { game, player, phys, world, scene, camera, THREE, cam, renderer };
+    freecam = new FreeCam(camera);
+    window.G = { game, player, phys, world, scene, camera, THREE, cam, renderer, freecam };
+    G.fly = (...a) => freecam.fly(...a);
     // top-down orthographic snapshot for comparing against satellite imagery
     G.topdown = (x0 = data.bounds.x0, z0 = data.bounds.z0, x1 = data.bounds.x1, z1 = data.bounds.z1, w = 1200) => {
       const h = Math.round(w * (z1 - z0) / (x1 - x0));
@@ -101,13 +115,39 @@ async function boot() {
   renderer.render(scene, camera);
 }
 
-ui.onPlay = () => {
+const startGame = () => {
   sfx.start();
   state = 'play';
+  ui.hideSlots();
   ui.hideTitle();
   game.startPlaying();
 };
-ui.onReset = () => { game.reset(); };
+ui.onPlay = () => ui.showSlots();
+ui.onSelectSlot = slot => {
+  try { game.load(slot); } catch (e) {
+    // the save didn't fit this version: flag it and reopen the save screen, which explains what to do
+    console.error(e);
+    game.slot = 0;
+    markBad(slot);
+    try { sessionStorage.setItem('guancha.openSlots', '1'); } catch (err) { /* ignore */ }
+    location.reload();
+    return;
+  }
+  game.spawn();
+  cam.snap(player);
+  ui.hideSlots();
+  if (!game.playerName) ui.promptName();
+  else startGame();
+};
+ui.onName = name => { game.playerName = name; game.save(); startGame(); };
+ui.onCopySlot = (from, to) => copySave(from, to);
+ui.onMoveSlot = (from, to) => moveSave(from, to);
+ui.onDeleteSlot = slot => deleteSave(slot);
+ui.onToSlots = () => {
+  game.save();
+  try { sessionStorage.setItem('guancha.openSlots', '1'); } catch (e) { /* ignore */ }
+  location.reload();
+};
 ui.onPause = on => { state = on ? 'pause' : 'play'; input.release(); };
 ui.onWarp = (x, y, z, face) => { player.teleport(x, y, z, face); cam.snap(player); };
 ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); game?.onLang(); };
@@ -121,7 +161,12 @@ function frame() {
   let dt = Math.min(clock.getDelta(), 1 / 20);
   const now = performance.now() / 1000;
   const inp = input.frame();
-  if (state === 'play') {
+  if (freecam?.on) {
+    // debug fly-through: the world keeps animating but the player stays put
+    if (inp.pausePressed) freecam.toggle(false);
+    freecam.update(dt, inp, input.keys);
+    game.animateOnly(dt, now);
+  } else if (state === 'play') {
     if (inp.pausePressed) { ui.pause(true); return; }
     if (inp.mapPressed) { ui.openMap(); return; }
     // physics in small steps for stable collisions
@@ -144,6 +189,7 @@ function frame() {
     cam.update(dt, player, { camDX: 0, camDY: 0 }, 0, 0);
     game.animateOnly(dt, now);
   }
+  world.fadeFoliage(camera, player.pos, dt);
   // light and shadow follow the player
   const P = player.pos;
   sun.position.set(P.x + SUN_DIR.x * 80, P.y + SUN_DIR.y * 80, P.z + SUN_DIR.z * 80);
@@ -162,7 +208,7 @@ function frame() {
   ui.frame(dt, player, cam);
   if (DEBUG) {
     fpsN++; fpsT += dt;
-    if (fpsT > 1) { ui.debug(`${Math.round(fpsN / fpsT)} fps · ${renderer.info.render.calls} calls · ${(renderer.info.render.triangles / 1000) | 0}k tris · ${player.state} · ${P.x.toFixed(1)},${P.y.toFixed(1)},${P.z.toFixed(1)} (${(P.x / 0.6).toFixed(0)},${(-P.z / 0.6).toFixed(0)})`); fpsN = fpsT = 0; }
+    if (fpsT > 1) { ui.debug(`${Math.round(fpsN / fpsT)} fps · ${renderer.info.render.calls} calls · ${(renderer.info.render.triangles / 1000) | 0}k tris · ${freecam.on ? 'freecam ' + camera.position.toArray().map(v => v.toFixed(1)).join(',') : player.state} · ${P.x.toFixed(1)},${P.y.toFixed(1)},${P.z.toFixed(1)} (${(P.x / 0.6).toFixed(0)},${(-P.z / 0.6).toFixed(0)})`); fpsN = fpsT = 0; }
   }
 }
 
