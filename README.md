@@ -61,6 +61,8 @@ Add `?debug` to the address to show frame rate, draw calls and position. Press *
 
 ## How the level was made
 
+For a ground-level visual pass, see the [coordinate-tagged La Guancha Street View reference index](references/street-view/README.md). It links to live Google panoramas, with capture dates and corresponding game coordinates for Claude's review.
+
 `tools/fetch.py` downloads the raw data, and `tools/build_world.py` turns it into `data/`:
 
 - **OpenStreetMap** (Overpass): the boardwalk, kiosks, buildings, piers, roads, park, beach and breakwaters
