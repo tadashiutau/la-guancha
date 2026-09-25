@@ -107,8 +107,22 @@
   #fade.on { opacity: 1; }
   #qarrow { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; display: none; z-index: 5; }
   #qarrow .a { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 50%; background: #ffd23f; border: 3px solid #1b2330; display: grid; place-items: center; font-size: 22px; color: #1b2330; font-weight: 900; box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+  #qarrow.pin .a { animation: qpin .7s ease-in-out infinite alternate; }
+  #qarrow.pin .d { top: -48px; }
+  @keyframes qpin { to { margin-top: 8px; } }
   #qarrow .d { position: absolute; left: -60px; top: 26px; width: 120px; text-align: center; font-weight: 800; font-size: 14px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
-  #qtop { top: calc(88px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-size: 15px; display: none; padding: 3px 12px; border-radius: 14px; background: rgba(0,0,0,.35); }
+  #qtop { top: calc(88px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-size: 15px; display: none; padding: 3px 12px; border-radius: 14px; background: rgba(0,0,0,.35); pointer-events: auto; cursor: pointer; z-index: 6; }
+  #qtop.many { background: rgba(27,35,48,.7); border: 2px solid #ffd23f; padding: 6px 14px; }
+  #qlist { position: fixed; top: calc(124px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: min(92vw, 420px); display: none; flex-direction: column; gap: 6px; padding: 10px; border-radius: 16px; background: rgba(255,250,240,.96); border: 3px solid #1b2330; z-index: 7; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+  #qlist.show { display: flex; }
+  #meter { top: calc(128px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: min(80vw, 340px); display: none; text-align: center; font-size: 17px; color: #fff; }
+  #meter.show { display: block; }
+  #meter .mb { height: 16px; margin-top: 4px; border-radius: 10px; border: 3px solid #1b2330; background: rgba(255,255,255,.85); overflow: hidden; }
+  #meter .mb div { height: 100%; width: 0; background: linear-gradient(90deg, #ff7aa8, #ffd23f); transition: width .15s; }
+  #qlist .qh { font-weight: 900; color: #b33a2a; text-align: center; }
+  #qlist button { font: inherit; font-weight: 800; font-size: 16px; text-align: left; min-height: 46px; padding: 8px 12px; border-radius: 12px; border: 2px solid #2d6a4c; background: #fff; color: #1b2330; }
+  #qlist button.on { background: #ffe39a; border-color: #b33a2a; }
+  body.cine #qtop, body.cine #qlist { visibility: hidden; }
   @media (max-height: 460px) { #minimap { width: 90px; height: 90px; top: calc(80px + var(--safe-t)); } #counters { font-size: 18px; } }
 </style>
 </head>
@@ -125,6 +139,8 @@
 <div id="minimap"><canvas id="mini" width="240" height="240"></canvas></div>
 <div id="timer" class="hud"></div>
 <div id="qtop" class="hud"></div>
+<div id="qlist"></div>
+<div id="meter" class="hud"><div class="ml"></div><div class="mb"><div></div></div></div>
 <div id="qarrow"><div class="a">➤</div><div class="d"></div></div>
 <div id="prog" class="hud"></div>
 <div id="banner" class="hud"></div>

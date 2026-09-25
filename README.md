@@ -2,7 +2,7 @@
 
 A small Super Mario Odyssey–style 3D exploration game set on the **Paseo Tablado La Guancha** in Ponce, Puerto Rico. It's built from real map data and runs in the browser on iPhone, Android tablets and desktop. The in-game text is Spanish first, with an English toggle.
 
-Collect **28 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park, to begin a six-step mystery with marked clues, a final gift, and a short cutscene (tap to skip).
+Collect **28 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around.
 
 ## Play it
 
@@ -43,7 +43,9 @@ This creates `dist/` and `la-guancha.zip` (about 6 MB). You can upload either on
 | Talk | 💬 button | F |
 | Map / pause | II button | M / Esc |
 
-Choose one of three save slots before playing and name your character. A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
+Choose one of three save slots before playing and name your character. A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically.
+
+The game is meant to be relaxed: timers never fail a challenge, the pava homes in on targets in front of you, and coins and shells are easy to grab. When several quests are going, tap the ⭐ quest label at the top (or press T) to pick which one the marker follows. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
 
 The pause map shows conch progress by area. Trees between the camera and the player fade so they do not hide the route. Moth's mystery has a quest marker at the park to start and a marker on every clue afterward; its progress stays in the selected save slot.
 

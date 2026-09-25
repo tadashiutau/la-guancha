@@ -18,6 +18,11 @@ function unlockIOS() {
   } catch (e) { /* ignore */ }
 }
 
+// vowel formants (Hz) for the NPC babble
+const FORMANTS = { a: [800, 1250], e: [480, 1900], i: [320, 2350], o: [520, 900], u: [360, 780] };
+// voices that should sound like their character
+const VOICE_PITCH = { 'Moth': 620, 'Gabi': 440, 'Tito': 300, 'Doña Carmen': 250, 'Yari': 330, 'Don Tomás': 150, 'Don Pepe': 135 };
+
 export class Sfx {
   constructor() {
     this.ctx = null; this.muted = false; this.coinStreak = 0; this.lastCoin = 0;
@@ -93,16 +98,38 @@ export class Sfx {
     s.start(t);
   }
 
+  // Animal Crossing–style babble: every letter is a tiny sung syllable. A buzzy source goes
+  // through two band-pass "formant" filters shaped like the letter's vowel, at a pitch that
+  // belongs to the speaker (old men low, kids and Moth high).
   voice(who, ch) {
     if (!this.ctx || this.muted || this.ctx.state !== 'running') return;
-    const now = this.ctx.currentTime;
-    if (now - (this.lastVoiceAt ?? -1) < 0.065) return;
+    const c = this.ctx, now = c.currentTime;
+    if (now - (this.lastVoiceAt ?? -1) < 0.055) return;
     this.lastVoiceAt = now;
+    const name = String(who || '');
     let seed = 0;
-    for (const letter of who) seed = (seed * 31 + letter.codePointAt(0)) | 0;
-    const base = 290 + (Math.abs(seed) % 8) * 35;
-    const pitch = base * Math.pow(2, ((ch.codePointAt(0) % 7) - 3) / 24);
-    this.tone(pitch, 0.065, { type: seed & 1 ? 'triangle' : 'square', vol: 0.025, slide: 0.82, attack: 0.004 });
+    for (const letter of name) seed = (seed * 31 + letter.codePointAt(0)) | 0;
+    const base = VOICE_PITCH[name] ?? 210 + (Math.abs(seed) % 9) * 28;
+    const low = ch.toLowerCase().normalize('NFD')[0];
+    const vowel = FORMANTS[low] || FORMANTS['aeiou'[(low.codePointAt(0) + Math.abs(seed)) % 5]];
+    const pitch = base * Math.pow(2, ((low.codePointAt(0) * 7) % 9 - 4) / 24);
+    const dur = 0.075;
+    const o = c.createOscillator();
+    o.type = name === 'Moth' ? 'triangle' : 'sawtooth';
+    o.frequency.setValueAtTime(pitch, now);
+    o.frequency.exponentialRampToValueAtTime(pitch * (name === 'Moth' ? 1.25 : 0.92), now + dur);
+    const out = c.createGain();
+    out.gain.setValueAtTime(0, now);
+    out.gain.linearRampToValueAtTime(0.3, now + 0.008);
+    out.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    for (const [f, q, g] of [[vowel[0], 6, 1], [vowel[1], 9, 0.55]]) {
+      const bp = c.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const gg = c.createGain(); gg.gain.value = g;
+      o.connect(bp); bp.connect(gg); gg.connect(out);
+    }
+    out.connect(this.master);
+    o.start(now); o.stop(now + dur + 0.02);
   }
 
   play(name) {

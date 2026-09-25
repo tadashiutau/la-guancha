@@ -434,6 +434,26 @@ export class Player {
     h.state = 'out'; h.t = 0;
     h.pos.set(this.pos.x + fx * 0.5, this.pos.y + 0.75, this.pos.z + fz * 0.5);
     h.vel.set(fx * 22, 0, fz * 22);
+    h.out = 0.24;
+    // aim assist: touch controls are imprecise, so the pava homes in on the best target
+    // roughly in front (crates, coconuts, pelicans...), up and down included
+    let best = null, bestScore = Infinity;
+    for (const tg of this.aimTargets?.() || []) {
+      const dx = tg.x - h.pos.x, dy = tg.y - h.pos.y, dz = tg.z - h.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 10 || d < 0.3 || dy < -3 || dy > 8) continue;
+      const cos = (dx * fx + dz * fz) / d;
+      if (cos < 0.45) continue; // within about 63 degrees of facing
+      const score = d * (2 - cos);
+      if (score < bestScore) { bestScore = score; best = tg; }
+    }
+    if (best) {
+      const d = new THREE.Vector3(best.x - h.pos.x, best.y - h.pos.y, best.z - h.pos.z);
+      const l = d.length();
+      h.vel.copy(d.multiplyScalar(22 / l));
+      h.out = Math.min(0.5, l / 22 + 0.05);
+      this.face = Math.atan2(h.vel.x, h.vel.z);
+    }
     this.m.hatSlot.remove(this.hatMesh);
     this.scene.add(this.hatMesh);
     this.throwAnim = 0.25;
@@ -447,7 +467,7 @@ export class Player {
     h.spin += dt * 25;
     if (h.state === 'out') {
       h.pos.addScaledVector(h.vel, dt);
-      if (h.t > 0.24 || this.phys.solidAt(h.pos.x, h.pos.y, h.pos.z)) { h.state = 'hover'; h.t = 0; }
+      if (h.t > (h.out || 0.24) || this.phys.solidAt(h.pos.x, h.pos.y, h.pos.z)) { h.state = 'hover'; h.t = 0; }
     } else if (h.state === 'hover') {
       const hold = inp.hat ? 1.1 : 0.5;
       if (h.t > hold) { h.state = 'back'; h.t = 0; }

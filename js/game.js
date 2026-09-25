@@ -64,6 +64,9 @@ export class Game {
     Object.assign(this, o);
     this.coins = []; this.conchas = []; this.masks = []; this.npcs = []; this.flags = [];
     this.crates = []; this.spots = []; this.challenges = []; this.targets = [];
+    // things the pava should home in on: each entry returns a list of {x, y, z}
+    this.aimables = [() => this.crates.filter(c => !c.broken).map(c => ({ x: c.x, y: c.y + 0.5, z: c.z }))];
+    this.player.aimTargets = () => this.aimables.flatMap(f => f());
     this.animals = [];
     this.wallet = 0;
     this.q = {};                    // quest state
@@ -244,8 +247,22 @@ export class Game {
         n.badge.position.set(n.x, n.y + 2.0 + Math.sin(now * 3) * 0.08, n.z);
       }
     }
-    let obj = null;
-    for (const c of this.challenges) { obj = c.objective?.(); if (obj) break; }
+    // Every quest in progress offers an objective; the tracker follows one of them and the
+    // player can switch (tap the ⭐ label). A quest that just started gets tracked automatically.
+    const objs = [];
+    this.challenges.forEach((c, i) => { const o = c.objective?.(); if (o) objs.push({ i, o }); });
+    if (this.seenQuests) {
+      for (const q of objs) {
+        if (this.seenQuests.has(q.i) || q.o.idle) continue;
+        this.trackIdx = q.i;
+        if (objs.length > 1) this.ui.toast(`⭐ ${tr(q.o.label)} · ${t('switchQuest')}`, 3.5);
+      }
+    }
+    this.seenQuests = new Set(objs.map(q => q.i));
+    const tracked = objs.find(q => q.i === this.trackIdx) || objs.find(q => !q.o.idle) || objs[0];
+    if (tracked) this.trackIdx = tracked.i;
+    this.quests = objs;
+    const obj = tracked?.o || null;
     this.objective = obj;
     this.qMark.visible = !!obj;
     if (!obj) { this.ui.questArrow(null); return; }
@@ -256,11 +273,31 @@ export class Game {
     const behind = v.z > 1;
     const dist = Math.round(Math.hypot(obj.x - this.player.pos.x, obj.z - this.player.pos.z) / S);
     const onScreen = !behind && Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.85;
-    if (onScreen) { this.ui.questArrow({ on: true, dist, label: obj.label }); return; }
+    const n = objs.length, at = objs.indexOf(tracked) + 1;
+    if (onScreen) {
+      // pin the arrow right above the goal so it never vanishes when you look straight at it
+      const pin = new THREE.Vector3(obj.x, obj.y + 2.5, obj.z).project(cam);
+      this.ui.questArrow({ on: true, sx: pin.x, sy: pin.y, dist, label: obj.label, n, at });
+      return;
+    }
     let ax = behind ? -v.x : v.x, ay = behind ? -v.y : v.y;
     if (behind && Math.abs(ay) < 0.2) ay = -0.5;
     const ang = Math.atan2(ay, ax);
-    this.ui.questArrow({ on: false, ang, dist, label: obj.label });
+    this.ui.questArrow({ on: false, ang, dist, label: obj.label, n, at });
+  }
+
+  // quests the tracker can switch between, with distances for the list
+  questChoices() {
+    const P = this.player.pos;
+    return (this.quests || []).map(({ i, o }) => ({ i, label: o.label, tracked: i === this.trackIdx,
+      dist: Math.round(Math.hypot(o.x - P.x, o.z - P.z) / S) }));
+  }
+  trackQuest(i) { this.trackIdx = i; this.sfx.play('talk'); }
+  nextQuest() {
+    const q = this.quests || [];
+    if (q.length < 2) return;
+    const k = q.findIndex(x => x.i === this.trackIdx);
+    this.trackQuest(q[(k + 1) % q.length].i);
   }
 
   // ------------------------------------------------------------ instanced collectibles
@@ -522,7 +559,7 @@ export class Game {
     for (const c of this.coins) {
       if (!c.alive) continue;
       const dx = c.x - cx, dy = c.y - cy, dz = c.z - cz;
-      let got = dx * dx + dz * dz < 0.9 && dy * dy < 1.1;
+      let got = dx * dx + dz * dz < 1.45 && dy * dy < 1.6; // generous: easy to grab on touch
       if (!got && hatOut) {
         const hx = c.x - hat.pos.x, hy = c.y - hat.pos.y, hz = c.z - hat.pos.z;
         got = hx * hx + hy * hy + hz * hz < 1.0;
@@ -552,7 +589,7 @@ export class Game {
     for (const c of this.conchas) {
       if (!c.alive) continue;
       const dx = c.x - cx, dy = c.y - cy, dz = c.z - cz;
-      let got = dx * dx + dz * dz < 1.0 && dy * dy < 1.2;
+      let got = dx * dx + dz * dz < 1.6 && dy * dy < 1.7;
       if (!got && hatOut) { const hx = c.x - hat.pos.x, hy = c.y - hat.pos.y, hz = c.z - hat.pos.z; got = hx * hx + hy * hy + hz * hz < 1.0; }
       if (got) {
         c.alive = false; changed = true;
@@ -608,15 +645,14 @@ export class Game {
     if (this.timerState) {
       const ts = this.timerState;
       ts.t -= dt;
-      if (Math.ceil(ts.t) < ts.last && ts.t < 5) this.sfx.play('tick');
       ts.last = Math.ceil(ts.t);
       ui.timer(Math.max(0, ts.t));
       if (ts.t <= 0) {
+        // Relaxed on purpose: running out of time never fails a challenge (touch controls are
+        // hard to be precise with). The clock just goes away and you finish at your own pace.
         this.timerState = null;
         ui.timer(null);
-        this.sfx.play('fail');
-        ui.toast(t('failed'), 2.5);
-        ts.onFail?.();
+        ui.toast(t('noRush'), 3);
       }
     }
     this.animateOnly(dt, now);

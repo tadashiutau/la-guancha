@@ -23,6 +23,9 @@ export class UI {
     $('bYes').onclick = () => { $('confirm').classList.remove('show'); this.confirmed?.(); this.confirmed = null; };
     $('bNo').onclick = () => { $('confirm').classList.remove('show'); this.confirmed = null; };
     $('pauseBtn').addEventListener('pointerdown', e => { e.stopPropagation(); this.pause(true); });
+    // quest tracker: tap the ⭐ label to pick which quest to follow
+    $('qtop').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); this.toggleQuestList(); });
+    window.addEventListener('keydown', e => { if (e.code === 'KeyT' && e.target.tagName !== 'INPUT') this.game?.nextQuest(); });
     $('bResume').onclick = () => this.pause(false);
     $('bMap').onclick = () => { this.pause(false, true); this.openMap(); };
     $('bMapClose').onclick = () => this.closeMap();
@@ -198,8 +201,18 @@ export class UI {
     if (!q) { el.style.display = 'none'; top.style.display = 'none'; return; }
     const label = (q.label ? tr(q.label) + ' · ' : '') + q.dist + ' m';
     top.style.display = 'block';
-    top.textContent = '⭐ ' + label;
-    if (q.on) { el.style.display = 'none'; return; }
+    top.textContent = '⭐ ' + label + (q.n > 1 ? `  ⇄ ${q.at}/${q.n}` : '');
+    top.classList.toggle('many', q.n > 1);
+    if (q.on) {
+      // on screen: a pin over the goal, pointing down at it
+      el.style.display = 'block';
+      el.classList.add('pin');
+      el.style.transform = `translate(${q.sx * innerWidth / 2}px, ${-q.sy * innerHeight / 2}px)`;
+      el.firstElementChild.style.transform = 'rotate(90deg)';
+      el.lastElementChild.textContent = q.dist + ' m';
+      return;
+    }
+    el.classList.remove('pin');
     const w = innerWidth / 2 - 50, h = innerHeight / 2 - 70;
     const c = Math.cos(q.ang), s = Math.sin(q.ang);
     const k = Math.min(w / Math.abs(c || 1e-6), h / Math.abs(s || 1e-6));
@@ -207,6 +220,34 @@ export class UI {
     el.style.transform = `translate(${c * k}px, ${-s * k}px)`;
     el.firstElementChild.style.transform = `rotate(${-q.ang}rad)`;
     el.lastElementChild.textContent = q.dist + ' m';
+  }
+
+  toggleQuestList(open = !$('qlist').classList.contains('show')) {
+    const box = $('qlist');
+    const choices = this.game?.questChoices() || [];
+    if (!open || choices.length < 2) { box.classList.remove('show'); return; }
+    box.replaceChildren();
+    const title = document.createElement('div'); title.className = 'qh'; title.textContent = t('quests');
+    box.append(title);
+    for (const c of choices) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = c.tracked ? 'on' : '';
+      b.textContent = `${c.tracked ? '⭐' : '☆'} ${tr(c.label)} · ${c.dist} m`;
+      b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); this.game.trackQuest(c.i); box.classList.remove('show'); });
+      box.append(b);
+    }
+    box.classList.add('show');
+    clearTimeout(this.qlistT);
+    this.qlistT = setTimeout(() => box.classList.remove('show'), 8000);
+  }
+
+  // a labelled progress bar under the quest label (petting Moth, feeding her the Churu)
+  meter(label, frac = 0) {
+    const el = $('meter');
+    if (label == null) { el.classList.remove('show'); return; }
+    el.classList.add('show');
+    el.firstElementChild.textContent = label;
+    el.lastElementChild.firstElementChild.style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
   }
 
   talkButton(show) { $('bTalk').classList.toggle('show', !!show); }
