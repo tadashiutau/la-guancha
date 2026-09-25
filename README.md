@@ -24,7 +24,7 @@ The repo root is the game itself, so GitHub Pages serves it directly (Settings â
 ./build.sh
 ```
 
-This creates `dist/` and `la-guancha.zip` (about 15 MB with the generated 3D models). You can upload either one to Netlify Drop, Cloudflare Pages, etc.
+This creates `dist/` and `la-guancha.zip` (about 6 MB). You can upload either one to Netlify Drop, Cloudflare Pages, etc.
 
 ### Put it on the home screen (full screen, like an app)
 
@@ -43,15 +43,19 @@ This creates `dist/` and `la-guancha.zip` (about 15 MB with the generated 3D mod
 | Talk | ðŸ’¬ button | F |
 | Map / pause | II button | M / Esc |
 
-Choose one of three save slots before playing and name your character. Progress is saved in the browser automatically. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
+Choose one of three save slots before playing and name your character. A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
 
 The pause map shows conch progress by area. Trees between the camera and the player fade so they do not hide the route. Moth's mystery has a quest marker at the park to start and a marker on every clue afterward; its progress stays in the selected save slot.
 
 ## Generated models
 
-The conch, coin, vejigante mask and crate models in `assets/island-assets.glb` were generated with Higgsfield 3D Jutsu. The chest keeps its original animated lid. Moth's model was generated with Meshy from reference photos supplied by the project owner. `assets/moth-optimized.glb` is the in-game version: its dense fur mesh was reduced, vertex colors and normals were baked, and attributes were quantized. This brought it from 168 MB to 17.2 MB while preserving the cat's silhouette. The game's bright green eyes are separate geometry to keep her expression legible at this size.
+The conch, coin, vejigante mask and crate models in `assets/island-assets.glb` were generated with Higgsfield 3D Jutsu. The chest keeps its original animated lid. Moth's model was generated with Meshy from reference photos supplied by the project owner. `assets/moth-optimized.glb` (17.2 MB) is a reduced copy with baked vertex colors. The game loads `assets/moth-lowpoly.glb` (about 400 KB, 3,500 triangles), a flat-shaded low-poly Moth made from it by `tools/lowpoly_moth.py`: the scan is filled into one solid shape, simplified, and each facet takes the fur color around it. Her green eyes are separate geometry, placed on the face surface when the game loads.
 
 `assets/moth-meshy-original.glb.xz` is a lossless archive of the **untouched original Moth GLB**. Extract it with `xz -dk assets/moth-meshy-original.glb.xz` to compare or try another optimization. Claude is welcome to improve the downsizing while keeping Moth's features and browser performance. The 13 images in `assets/moth-reference/` are the owner's visual references; `IMG_0412.jpg` was uploaded to Meshy for the generation. Repository copies have camera metadata removed. Neither the original archive nor reference images are included in `dist/` or the playable zip.
+
+## Debug mode
+
+Add `?debug` to the address to show frame rate, draw calls and position. Press **V** there for a free camera: WASD or arrows fly, Space up, Shift or C down, hold Alt to go faster, drag the mouse (or Q/R) to look, and V or Esc returns to the player. From the browser console, `G.fly(x, y, z, lookX, lookY, lookZ)` jumps the camera to a spot.
 
 ## How the level was made
 

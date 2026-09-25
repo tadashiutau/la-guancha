@@ -723,10 +723,12 @@ function buildTerrain(scene, data) {
 // Keep the aerial image between mapped areas, and paint crisp land cover on defined polygons.
 function groundMap(data) {
   const f = data.world.frame;
+  // keep the photo's full resolution (0.5 m per pixel); polygons are drawn in meters on top
   const c = document.createElement('canvas');
-  c.width = f.x1 - f.x0; c.height = f.y1 - f.y0;
+  c.width = data.colorImg.width; c.height = data.colorImg.height;
   const g = c.getContext('2d');
-  g.drawImage(data.colorImg, 0, 0, c.width, c.height);
+  g.drawImage(data.colorImg, 0, 0);
+  g.scale(c.width / (f.x1 - f.x0), c.height / (f.y1 - f.y0));
   const fill = (polys, color) => {
     g.fillStyle = color;
     for (const poly of polys) {
@@ -782,14 +784,16 @@ function buildRoutes(scene, data) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }));
+    // polygon offset keeps the ribbons on top of the terrain without lifting them visibly
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     mesh.receiveShadow = true;
     scene.add(mesh);
   };
-  add(paths, 0.28 * S, 0.035, 0xb18e69);
-  add(paths, 0, 0.075, 0xd8b895);
-  add(roads, 0.65 * S, 0.12, 0xc9c4b6);
-  add(roads, 0, 0.2, 0x656c72);
+  add(paths, 0.28 * S, 0.03, 0xb18e69);
+  add(paths, 0, 0.05, 0xd8b895);
+  add(roads, 0.65 * S, 0.06, 0xc9c4b6);
+  add(roads, 0, 0.09, 0x656c72);
 }
 
 // Tiled procedural detail gives grass, sand and paving definition close to the player.

@@ -101,7 +101,7 @@ export async function loadIslandModels() {
 
 export async function loadMothModel() {
   try {
-    const response = await fetch('assets/moth-optimized.glb');
+    const response = await fetch('assets/moth-lowpoly.glb');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     parseGLB(await response.arrayBuffer(), 'moth');
     return true;

@@ -1,6 +1,6 @@
 // HUD, dialogs, menus, mini-map and the big map.
 import { t, tr, getLang } from './i18n.js';
-import { SLOT_COUNT, readSave } from './saves.js';
+import { SLOT_COUNT, slotInfo, isMarkedBad } from './saves.js';
 
 const $ = id => document.getElementById(id);
 
@@ -73,10 +73,24 @@ export class UI {
   renderSlots() {
     const box = $('saveSlots'); box.replaceChildren();
     for (let slot = 1; slot <= SLOT_COUNT; slot++) {
-      const save = readSave(slot);
-      const card = document.createElement('div'); card.className = 'save-slot';
-      const title = document.createElement('strong'); title.textContent = `${t('slot')} ${slot} · ${save ? (save.name || t('unnamedSlot')) : t('emptySlot')}`;
+      const info = slotInfo(slot);
+      const bad = info.status === 'bad' || (info.status === 'ok' && isMarkedBad(slot));
+      const save = bad ? null : info.save;
+      const card = document.createElement('div'); card.className = bad ? 'save-slot bad' : 'save-slot';
+      const title = document.createElement('strong');
+      title.textContent = `${t('slot')} ${slot} · ${bad ? t('badSlot') : save ? (save.name || t('unnamedSlot')) : t('emptySlot')}`;
       card.append(title);
+      if (bad) {
+        // an old or damaged save: explain, and only offer to delete it
+        const why = document.createElement('p'); why.textContent = t('badSlotHelp');
+        card.append(why);
+        const row = document.createElement('div'); row.className = 'row';
+        const del = document.createElement('button'); del.className = 'pill pink'; del.type = 'button';
+        del.textContent = t('deleteSlot');
+        del.onclick = () => this.confirmAction(`${t('deleteSaveConfirm')} ${slot}?`, () => { this.onDeleteSlot(slot); this.renderSlots(); });
+        row.append(del); card.append(row); box.append(card);
+        continue;
+      }
       if (save) {
         const info = document.createElement('p');
         const minutes = Math.floor((save.time || 0) / 60);

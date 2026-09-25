@@ -21,8 +21,33 @@ export function migrateSave() {
 }
 
 export function readSave(slot) {
-  try { return JSON.parse(localStorage.getItem(key(slot)) || 'null'); }
-  catch (e) { return null; }
+  const info = slotInfo(slot);
+  return info.status === 'ok' ? info.save : null;
+}
+
+// What a slot holds: 'empty', 'ok', or 'bad' when it can't be loaded by this version (unreadable,
+// or from the very first release, which stored progress by list order and no longer lines up).
+export function slotInfo(slot) {
+  let raw;
+  try { raw = localStorage.getItem(key(slot)); } catch (e) { return { status: 'empty' }; }
+  if (!raw) return { status: 'empty' };
+  let save;
+  try { save = JSON.parse(raw); } catch (e) { return { status: 'bad' }; }
+  const list = v => v === undefined || Array.isArray(v);
+  const obj = v => v === undefined || (v && typeof v === 'object' && !Array.isArray(v));
+  const ok = save && typeof save === 'object' && save.v === 2
+    && ['coins', 'conchas', 'masks', 'flags', 'crates', 'spots'].every(k => list(save[k]))
+    && ['q', 'rv', 'shop'].every(k => obj(save[k]))
+    && (save.wallet === undefined || Number.isFinite(save.wallet));
+  return ok ? { status: 'ok', save } : { status: 'bad', save };
+}
+
+// A slot that failed while loading is marked so the save screen can explain it.
+export function markBad(slot) {
+  try { localStorage.setItem(key(slot) + '.bad', '1'); } catch (e) { /* ignore */ }
+}
+export function isMarkedBad(slot) {
+  try { return localStorage.getItem(key(slot) + '.bad') === '1'; } catch (e) { return false; }
 }
 
 export function writeSave(slot, save) {
@@ -32,6 +57,7 @@ export function writeSave(slot, save) {
 
 export function copySave(from, to) {
   const save = readSave(from);
+  if (save) { try { localStorage.removeItem(key(to) + '.bad'); } catch (e) { /* ignore */ } }
   return !!save && from !== to && writeSave(to, save);
 }
 
@@ -40,6 +66,6 @@ export function moveSave(from, to) {
 }
 
 export function deleteSave(slot) {
-  try { localStorage.removeItem(key(slot)); return true; }
+  try { localStorage.removeItem(key(slot)); localStorage.removeItem(key(slot) + '.bad'); return true; }
   catch (e) { return false; }
 }

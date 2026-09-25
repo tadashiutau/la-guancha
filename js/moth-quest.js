@@ -81,6 +81,7 @@ export function buildMothQuest(g, places) {
   const startBox = box();
   startBox.position.set(at[0].x, at[0].y, at[0].z);
   g.root.add(startBox);
+  g.phys.addBox(at[0].x, at[0].z, 0.75, 0.55, 0, at[0].y - 0.3, at[0].y + 0.5, { tag: 'prop' });
   const moth = M.mothMesh();
   moth.position.y = 0.52;
   const mothRoot = new THREE.Group(); mothRoot.add(moth);

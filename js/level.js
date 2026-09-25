@@ -768,11 +768,42 @@ export function defineLevel(g) {
   yari.talk = async g => { g.q.yari = true; g.save(); await yariTalk(g); };
 
   // A clear starting marker in the park leads through five spooky, talkable clues.
-  const mothPark = { x: pkx + 4, z: pkz + 4 };
-  const mothKiosk = landSpot(fromNorth(0.38));
-  const mothMangrove = landSpot(fromNorth(0.78));
-  const mothTower = { x: tfx + 4, z: tfz - 3 };
-  const mothBeach = { x: bfx + 5, z: bfz + 4 };
+  // Moth's box goes on open grass near the park flag: off paths and roads, clear of coins and people
+  const lanes = [...data.world.footways.map(w => ({ p: w.map(([x, y]) => L(x, y)), w: 1.8 })),
+    ...data.world.roads.map(r => ({ p: r.p.map(([x, y]) => L(x, y)), w: r.w * S / 2 + 1.5 }))];
+  const onLane = (x, z) => lanes.some(({ p, w }) => p.some((q, i) => {
+    if (i === 0) return false;
+    const [ax, az] = p[i - 1], ex = q[0] - ax, ez = q[1] - az, l2 = ex * ex + ez * ez || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2));
+    return Math.hypot(x - ax - ex * t, z - az - ez * t) < w;
+  }));
+  // Every Moth clue needs open footing: nothing overhead or around it (no canopy, roof or kiosk),
+  // off paths and roads, and clear of coins and people. Pawprints may sit on the boardwalk deck.
+  const mothOpen = (x, z, deck = false) => {
+    const cols = phys.near(x, z, 1.2).filter(c => c.maxx > x - 0.9 && c.minx < x + 0.9 && c.maxz > z - 0.9 && c.minz < z + 0.9);
+    if (deck ? !cols.length || cols.some(c => c.tag !== 'deck') || Math.abs(top(x, z) - deckY) > 0.4
+      : cols.length || H(x, z) < 0.3 || onLane(x, z)) return false;
+    return !g.coins.some(c => dist2(c.x, c.z, x, z) < 2) && !g.npcs.some(n => dist2(n.x, n.z, x, z) < 2.5)
+      && !g.flags.some(f => dist2(f.x, f.z, x, z) < 3);
+  };
+  const mothSpot = (cx, cz, deck = false) => {
+    for (let r = 0; r < 40; r += 0.5) for (let k = 0, n = Math.max(1, Math.round(r * 5)); k < n; k++) {
+      const an = k / n * Math.PI * 2 + r;
+      const x = cx + Math.cos(an) * r, z = cz + Math.sin(an) * r;
+      if (mothOpen(x, z, deck)) return { x, z };
+    }
+    return { x: cx, z: cz };
+  };
+  const mothPark = mothSpot(pkx + 4, pkz + 4);
+  const kioskWalk = along(fromNorth(0.38), 0);
+  const mothKiosk = mothSpot(kioskWalk.x, kioskWalk.z, true);
+  // the "eyes" wait beside a real mangrove, on firm ground
+  const nearKiosk = along(fromNorth(0.78), -4);
+  const mangroves = (world.info.foliageTrees || []).filter(t => t.pieces[0]?.kind === 'mangrove');
+  const mg = mangroves.sort((a, b) => dist2(a.x, a.z, nearKiosk.x, nearKiosk.z) - dist2(b.x, b.z, nearKiosk.x, nearKiosk.z))[0];
+  const mothMangrove = mg ? mothSpot(mg.x, mg.z) : mothSpot(nearKiosk.x, nearKiosk.z);
+  const mothTower = mothSpot(tfx + 4, tfz - 3);
+  const mothBeach = mothSpot(bfx + 5, bfz + 4);
   buildMothQuest(g, { top, park: mothPark, kiosks: mothKiosk, tower: mothTower,
     beach: mothBeach, mangrove: mothMangrove });
 

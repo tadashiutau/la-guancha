@@ -254,18 +254,32 @@ export function mothMesh() {
     const iris = lam(0xb4d879, { emissive: 0x294917 });
     const pupil = lam(0x0b1115);
     const glint = lam(0xffffff, { emissive: 0x555555 });
+    // Seat the eyes on the actual face: cast a ray at the head to find its surface, then
+    // turn each eye to follow the face's slope so it sits in the fur instead of floating.
+    const ray = new THREE.Raycaster();
+    const Zf = new THREE.Vector3(0, 0, 1);
     for (const s of [-1, 1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), iris);
-      eye.scale.set(0.87, 0.95, 0.48);
-      eye.position.set(s * 0.092, 0.91, 0.405);
-      g.add(eye);
-      const slit = new THREE.Mesh(new THREE.SphereGeometry(0.025, 10, 8), pupil);
-      slit.scale.set(0.7, 1.13, 0.45);
-      slit.position.set(s * 0.092, 0.91, 0.432);
-      g.add(slit);
+      const x = s * 0.078, y = 0.9;
+      ray.set(new THREE.Vector3(x, y, 3), new THREE.Vector3(0, 0, -1));
+      const hit = ray.intersectObject(mesh)[0];
+      const at = hit ? hit.point : new THREE.Vector3(x, y, 0.35);
+      const n = hit ? hit.face.normal.clone() : Zf.clone();
+      if (n.z < 0) n.negate();
+      n.lerp(Zf, 0.5).normalize(); // halfway to straight ahead, so both eyes still look forward
+      const eyeGroup = new THREE.Group();
+      eyeGroup.position.copy(at);
+      eyeGroup.quaternion.setFromUnitVectors(Zf, n);
+      g.add(eyeGroup);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 10), iris);
+      eye.scale.set(0.9, 0.95, 0.4);
+      eyeGroup.add(eye);
+      const slit = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 8), pupil);
+      slit.scale.set(0.55, 1.2, 0.35);
+      slit.position.z = 0.012;
+      eyeGroup.add(slit);
       const shine = new THREE.Mesh(new THREE.SphereGeometry(0.009, 8, 6), glint);
-      shine.position.set(s * 0.092 - 0.015, 0.927, 0.443);
-      g.add(shine);
+      shine.position.set(-s * 0.014, 0.017, 0.018);
+      eyeGroup.add(shine);
     }
     g.scale.setScalar(0.75);
     g.userData.tail = new THREE.Object3D(); // the baked mesh has its own tail

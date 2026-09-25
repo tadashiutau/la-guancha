@@ -6,12 +6,12 @@ import { P } from './geo.js';
 export function buildFoliage(scene, trees, palmFrond) {
   const chunks = new Map();
   for (const tree of trees) for (const piece of tree.pieces) {
-    const key = `${piece.kind}:${Math.floor(piece.x / 60)},${Math.floor(piece.z / 60)}`;
+    const key = `${piece.kind}:${Math.floor(piece.x / 120)},${Math.floor(piece.z / 120)}`;
     if (!chunks.has(key)) chunks.set(key, []);
     chunks.get(key).push({ tree, piece });
   }
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: false, side: THREE.DoubleSide,
-    transparent: true, depthWrite: false });
+  // alpha hashing fades without transparency sorting, so overlapping canopies still draw in depth order
+  const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, alphaHash: true });
   mat.onBeforeCompile = shader => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float instanceOpacity; varying float vFoliageOpacity;')
