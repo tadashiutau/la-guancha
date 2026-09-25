@@ -1,0 +1,125 @@
+// All sounds are synthesized with WebAudio: no asset files needed.
+export class Sfx {
+  constructor() { this.ctx = null; this.muted = false; this.coinStreak = 0; this.lastCoin = 0; }
+
+  start() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : 0.55;
+    this.master.connect(this.ctx.destination);
+    this.startAmbience();
+  }
+
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.value = m ? 0 : 0.55;
+  }
+
+  tone(freq, dur, { type = 'square', vol = 0.15, slide = 0, delay = 0, attack = 0.005 } = {}) {
+    const c = this.ctx;
+    if (!c) return;
+    const t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+
+  noise(dur, { vol = 0.2, freq = 1200, q = 1, type = 'bandpass', delay = 0, slide = 0 } = {}) {
+    const c = this.ctx;
+    if (!c) return;
+    const t = c.currentTime + delay;
+    const n = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource(); s.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(t);
+  }
+
+  play(name) {
+    if (!this.ctx) return;
+    switch (name) {
+      case 'coin': {
+        const now = performance.now();
+        this.coinStreak = now - this.lastCoin < 400 ? Math.min(this.coinStreak + 1, 8) : 0;
+        this.lastCoin = now;
+        const b = 988 * Math.pow(2, this.coinStreak / 24);
+        this.tone(b, 0.07, { vol: 0.09 }); this.tone(b * 1.335, 0.3, { vol: 0.09, delay: 0.06 });
+        break;
+      }
+      case 'concha': [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.25, { type: 'triangle', vol: 0.14, delay: i * 0.05 })); break;
+      case 'jump': this.tone(300, 0.16, { type: 'square', vol: 0.05, slide: 2.2 }); break;
+      case 'bigjump': this.tone(260, 0.35, { type: 'square', vol: 0.06, slide: 3.2 }); break;
+      case 'longjump': this.noise(0.3, { vol: 0.12, freq: 800, slide: 2 }); this.tone(220, 0.25, { vol: 0.04, slide: 1.8 }); break;
+      case 'walljump': this.tone(420, 0.12, { vol: 0.06, slide: 1.8 }); this.noise(0.08, { vol: 0.1, freq: 2000 }); break;
+      case 'land': this.noise(0.06, { vol: 0.06, freq: 400, type: 'lowpass' }); break;
+      case 'poundstart': this.tone(600, 0.25, { type: 'sawtooth', vol: 0.05, slide: 0.4 }); break;
+      case 'pound': this.noise(0.35, { vol: 0.4, freq: 180, type: 'lowpass' }); this.tone(90, 0.3, { type: 'sine', vol: 0.3, slide: 0.5 }); break;
+      case 'dive': this.noise(0.25, { vol: 0.12, freq: 1500, slide: 0.5 }); break;
+      case 'hat': this.noise(0.3, { vol: 0.1, freq: 3000, q: 4, slide: 0.5 }); break;
+      case 'hatjump': this.tone(500, 0.2, { type: 'triangle', vol: 0.12, slide: 2 }); break;
+      case 'bounce': this.tone(200, 0.3, { type: 'sine', vol: 0.25, slide: 3 }); break;
+      case 'splash': this.noise(0.5, { vol: 0.25, freq: 900, slide: 0.3 }); break;
+      case 'stroke': this.noise(0.2, { vol: 0.08, freq: 700 }); break;
+      case 'mantle': this.noise(0.08, { vol: 0.08, freq: 600 }); break;
+      case 'break': this.noise(0.3, { vol: 0.35, freq: 500 }); this.noise(0.2, { vol: 0.2, freq: 1800, delay: 0.05 }); break;
+      case 'hit': this.tone(1200, 0.12, { type: 'triangle', vol: 0.12 }); this.tone(1600, 0.2, { type: 'triangle', vol: 0.1, delay: 0.06 }); break;
+      case 'talk': this.tone(520 + Math.random() * 200, 0.05, { type: 'triangle', vol: 0.05 }); break;
+      case 'shard': [660, 880, 1100].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', vol: 0.12, delay: i * 0.06 })); break;
+      case 'ring': this.tone(1320, 0.15, { type: 'sine', vol: 0.12 }); this.tone(1760, 0.2, { type: 'sine', vol: 0.1, delay: 0.05 }); break;
+      case 'appear': [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.3, { type: 'triangle', vol: 0.12, delay: i * 0.07 })); break;
+      case 'fail': [392, 330, 262].forEach((f, i) => this.tone(f, 0.25, { type: 'square', vol: 0.06, delay: i * 0.15 })); break;
+      case 'checkpoint': [392, 523, 659, 784].forEach((f, i) => this.tone(f, 0.18, { type: 'square', vol: 0.06, delay: i * 0.08 })); break;
+      case 'buy': [880, 1320].forEach((f, i) => this.tone(f, 0.15, { type: 'square', vol: 0.06, delay: i * 0.08 })); break;
+      case 'mask': this.fanfare(); break;
+      case 'pelican': this.noise(0.25, { vol: 0.12, freq: 900, q: 6 }); this.tone(300, 0.2, { type: 'sawtooth', vol: 0.03, slide: 0.7 }); break;
+      case 'meow': this.tone(700, 0.35, { type: 'triangle', vol: 0.08, slide: 1.4 }); this.tone(900, 0.3, { type: 'triangle', vol: 0.06, slide: 0.6, delay: 0.25 }); break;
+      case 'tick': this.tone(1500, 0.04, { type: 'square', vol: 0.04 }); break;
+      case 'coqui': this.coqui(); break;
+    }
+  }
+
+  fanfare() {
+    // a little plena-ish flourish
+    const seq = [[523, 0], [659, 0.11], [784, 0.22], [1047, 0.33], [988, 0.55], [1047, 0.66], [1319, 0.8]];
+    for (const [f, d] of seq) { this.tone(f, 0.28, { type: 'square', vol: 0.07, delay: d }); this.tone(f / 2, 0.28, { type: 'triangle', vol: 0.08, delay: d }); }
+    for (let i = 0; i < 8; i++) this.noise(0.05, { vol: 0.08, freq: 6000, delay: i * 0.11, type: 'highpass' }); // güiro-ish
+  }
+
+  coqui() {
+    this.tone(1150, 0.12, { type: 'sine', vol: 0.06 });
+    this.tone(1950, 0.18, { type: 'sine', vol: 0.06, delay: 0.14, slide: 1.08 });
+  }
+
+  startAmbience() {
+    const c = this.ctx;
+    // looping surf: filtered noise with slow swells
+    const n = c.sampleRate * 4;
+    const buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < n; i++) { last = last * 0.98 + (Math.random() * 2 - 1) * 0.02; d[i] = last * 6; }
+    const s = c.createBufferSource(); s.buffer = buf; s.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+    const g = c.createGain(); g.gain.value = 0.12;
+    const lfo = c.createOscillator(), lg = c.createGain();
+    lfo.frequency.value = 0.12; lg.gain.value = 0.08;
+    lfo.connect(lg); lg.connect(g.gain);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(); lfo.start();
+    this.surf = g;
+    setInterval(() => { if (Math.random() < 0.35) this.coqui(); }, 7000);
+  }
+}

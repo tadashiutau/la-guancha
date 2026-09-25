@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Chavos en La Guancha</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="La Guancha">
+<meta name="theme-color" content="#1e6fb8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23f5c542' stroke='%23b8860b' stroke-width='5'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' font-family='Georgia' font-weight='bold' fill='%23b8860b'%3E%24%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root { --gold: #f7c948; --ink: #1b2330; --pink: #f27ba0; --sea: #1e6fb8; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px); --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d2a44; color: #fff; font-family: "Trebuchet MS", "Avenir Next", system-ui, sans-serif; overscroll-behavior: none; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #touch { position: fixed; inset: 0; touch-action: none; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 2px 0 rgba(0,0,0,.45), 0 0 6px rgba(0,0,0,.35); font-weight: 800; }
+  #counters { top: calc(10px + var(--safe-t)); left: calc(12px + var(--safe-l)); display: flex; flex-direction: column; gap: 4px; font-size: 22px; }
+  .ctr { display: flex; align-items: center; gap: 8px; }
+  .ico { width: 26px; height: 26px; flex: none; }
+  #maskctr { top: calc(10px + var(--safe-t)); right: calc(12px + var(--safe-r)); font-size: 24px; display: flex; align-items: center; gap: 8px; }
+  #pauseBtn { position: fixed; top: calc(52px + var(--safe-t)); right: calc(12px + var(--safe-r)); width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255,255,255,.85); background: rgba(20,40,70,.45); color: #fff; font-size: 18px; font-weight: 900; display: grid; place-items: center; }
+  #minimap { position: fixed; top: calc(92px + var(--safe-t)); left: calc(12px + var(--safe-l)); width: 120px; height: 120px; border-radius: 50%; border: 3px solid rgba(255,255,255,.9); overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,.35); pointer-events: none; background: #1b6fa3; }
+  #minimap canvas { width: 100%; height: 100%; }
+  #banner { top: 22%; left: 0; right: 0; text-align: center; font-size: clamp(26px, 6vw, 48px); opacity: 0; transform: scale(.7); transition: opacity .25s, transform .25s; }
+  #banner.show { opacity: 1; transform: scale(1); }
+  #banner small { display: block; font-size: .5em; margin-top: 6px; color: #ffe9a8; }
+  #toast { bottom: calc(150px + var(--safe-b)); left: 0; right: 0; text-align: center; font-size: 18px; opacity: 0; transition: opacity .3s; }
+  #toast.show { opacity: 1; }
+  #timer { top: calc(12px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-size: 30px; display: none; padding: 2px 16px; border-radius: 20px; background: rgba(0,0,0,.3); }
+  #prog { top: calc(54px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-size: 20px; display: none; }
+  /* touch controls */
+  #stick { position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255,255,255,.12); border: 3px solid rgba(255,255,255,.4); opacity: 0; pointer-events: none; transition: opacity .15s; }
+  #stick.active { opacity: 1; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.75); transform: translate(-50%,-50%); }
+  #stickHint { position: fixed; left: calc(40px + var(--safe-l)); bottom: calc(50px + var(--safe-b)); width: 110px; height: 110px; border-radius: 50%; border: 3px dashed rgba(255,255,255,.35); pointer-events: none; display: none; }
+  body.touch #stickHint { display: block; }
+  body.touch #stickHint.hide { display: none; }
+  #btns { position: fixed; right: calc(14px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); width: 210px; height: 190px; display: none; }
+  body.touch #btns { display: block; }
+  .btn { position: absolute; border-radius: 50%; border: 3px solid rgba(255,255,255,.85); color: #fff; display: grid; place-items: center; font-weight: 900; touch-action: none; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+  .btn.on { transform: translateY(3px); box-shadow: none; filter: brightness(1.2); }
+  #bJump { right: 0; bottom: 0; width: 96px; height: 96px; background: rgba(230,70,70,.75); font-size: 34px; }
+  #bHat { right: 104px; bottom: 16px; width: 72px; height: 72px; background: rgba(233,190,80,.8); font-size: 28px; }
+  #bCrouch { right: 20px; bottom: 106px; width: 68px; height: 68px; background: rgba(60,120,210,.75); font-size: 28px; }
+  #bTalk { position: fixed; left: 50%; bottom: calc(40px + var(--safe-b)); transform: translateX(-50%); padding: 12px 22px; border-radius: 30px; background: rgba(255,255,255,.92); color: var(--ink); font-weight: 900; font-size: 20px; border: 3px solid var(--ink); display: none; }
+  #bTalk.show { display: block; }
+  /* dialogs and screens */
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l)); background: rgba(8,24,44,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 10; }
+  .screen.show { display: flex; }
+  .card { background: #fffaf0; color: var(--ink); border-radius: 22px; padding: 22px; max-width: 560px; width: 100%; max-height: 100%; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.4); border: 4px solid #2d6a4c; }
+  .card h2 { margin: 0 0 10px; font-size: 26px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .pill { flex: 1 1 auto; min-height: 48px; padding: 10px 16px; border-radius: 16px; border: 3px solid var(--ink); background: #fff; color: var(--ink); font: inherit; font-weight: 800; font-size: 17px; }
+  .pill.primary { background: var(--gold); }
+  .pill.pink { background: #ffd1dc; }
+  .pill:disabled { opacity: .45; }
+  pre.ctrl { white-space: pre-wrap; font: inherit; font-size: 15px; line-height: 1.45; background: #f3ead7; padding: 10px 12px; border-radius: 12px; margin: 8px 0 0; }
+  #title { background: linear-gradient(#3aa0e8 0%, #8fd3f4 45%, #f7d58c 100%); }
+  #title .card { text-align: center; background: rgba(255,250,240,.94); }
+  #title h1 { margin: 6px 0 2px; font-size: clamp(30px, 8vw, 50px); color: #b33a2a; font-family: Georgia, serif; line-height: 1.05; text-shadow: 0 3px 0 #f7c948; }
+  #title p { margin: 0 0 8px; font-weight: 700; color: #2d6a4c; }
+  #loadbar { height: 12px; background: #e6dcc6; border-radius: 8px; overflow: hidden; margin: 12px 0; }
+  #loadbar div { height: 100%; width: 0; background: #2d6a4c; transition: width .2s; }
+  #dialog { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); width: min(94vw, 620px); background: #fffaf0; color: var(--ink); border: 4px solid var(--ink); border-radius: 20px; padding: 14px 18px 12px; display: none; z-index: 8; font-size: 18px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+  #dialog.show { display: block; }
+  #dialog b { color: #b33a2a; }
+  #dialog .next { text-align: right; font-size: 14px; opacity: .6; }
+  #mapWrap { position: relative; width: 100%; aspect-ratio: 1200 / 840; border-radius: 14px; overflow: hidden; border: 3px solid var(--ink); background: #1b6fa3; }
+  #mapWrap canvas { width: 100%; height: 100%; display: block; }
+  #maskList { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; font-size: 14px; }
+  #maskList div { padding: 6px 8px; background: #f3ead7; border-radius: 10px; }
+  #maskList div.got { background: #ffe39a; font-weight: 800; }
+  #fade { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 9; }
+  #fade.on { opacity: 1; }
+  @media (max-height: 460px) { #minimap { width: 90px; height: 90px; top: calc(80px + var(--safe-t)); } #counters { font-size: 18px; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="touch"></div>
+
+<div id="counters" class="hud">
+  <div class="ctr"><svg class="ico" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="#f7c948" stroke="#b8860b" stroke-width="3"/><rect x="13" y="8" width="6" height="16" rx="2" fill="#b8860b"/></svg><span id="nCoins">0</span></div>
+  <div class="ctr"><svg class="ico" viewBox="0 0 32 32"><path d="M6 20 Q4 8 16 5 Q26 4 27 14 Q27 24 16 27 Q9 28 6 20Z" fill="#f7a8c4" stroke="#c2577f" stroke-width="2.5"/><path d="M10 18 Q16 10 22 14 M12 22 Q18 16 23 19" stroke="#c2577f" stroke-width="2" fill="none"/></svg><span id="nConchas">0</span><span style="opacity:.7;font-size:.75em">/<span id="nConchasT">0</span></span></div>
+</div>
+<div id="maskctr" class="hud"><svg class="ico" style="width:34px;height:34px" viewBox="0 0 40 40"><path d="M8 10 L3 2 L12 7 Z M32 10 L37 2 L28 7 Z M14 6 L16 0 L19 6Z M21 6 L24 0 L26 6Z" fill="#f7c948" stroke="#1b2330" stroke-width="1.5"/><ellipse cx="20" cy="21" rx="15" ry="14" fill="#e3342f" stroke="#1b2330" stroke-width="2"/><circle cx="14" cy="18" r="3.5" fill="#1b2330"/><circle cx="26" cy="18" r="3.5" fill="#1b2330"/><path d="M11 27 Q20 34 29 27" stroke="#1b2330" stroke-width="2.5" fill="#fff"/><circle cx="9" cy="24" r="1.8" fill="#f7c948"/><circle cx="31" cy="24" r="1.8" fill="#f7c948"/></svg><span id="nMasks">0</span><span style="opacity:.75;font-size:.75em">/<span id="nMasksT">0</span></span></div>
+<button id="pauseBtn" aria-label="Pausa">II</button>
+<div id="minimap"><canvas id="mini" width="240" height="240"></canvas></div>
+<div id="timer" class="hud"></div>
+<div id="prog" class="hud"></div>
+<div id="banner" class="hud"></div>
+<div id="toast" class="hud"></div>
+
+<div id="stick"><div id="knob"></div></div>
+<div id="stickHint"></div>
+<div id="btns">
+  <div class="btn" id="bJump" data-btn="jump">⤒</div>
+  <div class="btn" id="bHat" data-btn="hat">🎩</div>
+  <div class="btn" id="bCrouch" data-btn="crouch">⤓</div>
+</div>
+<button id="bTalk" data-btn="talk">💬 <span data-t="talk">Hablar</span></button>
+
+<div id="dialog"><div id="dlgText"></div><div id="dlgOpts" class="row"></div><div class="next" id="dlgNext">▼</div></div>
+
+<div id="title" class="screen show">
+  <div class="card">
+    <svg viewBox="0 0 120 70" width="150" aria-hidden="true"><path d="M20 40 Q60 0 100 40 Z" fill="#e9cf86" stroke="#8a6a2a" stroke-width="3"/><ellipse cx="60" cy="42" rx="52" ry="10" fill="#e9cf86" stroke="#8a6a2a" stroke-width="3"/><rect x="38" y="30" width="44" height="6" fill="#9b3b2a"/></svg>
+    <h1 data-t="title">Chavos en La Guancha</h1>
+    <p data-t="subtitle">Paseo Tablado · Ponce, Puerto Rico</p>
+    <div id="loadbar"><div></div></div>
+    <div class="row" id="titleBtns" style="display:none">
+      <button class="pill primary" id="bPlay" data-t="play">¡A jugar!</button>
+    </div>
+    <div class="row">
+      <button class="pill" id="bLang" data-t="language">English</button>
+      <button class="pill" id="bReset" data-t="newGame" style="display:none">Empezar de nuevo</button>
+    </div>
+    <pre class="ctrl" id="ctrlText"></pre>
+  </div>
+</div>
+
+<div id="pause" class="screen">
+  <div class="card">
+    <h2 data-t="paused">Pausa</h2>
+    <div class="row">
+      <button class="pill primary" id="bResume" data-t="resume">Seguir jugando</button>
+      <button class="pill" id="bMap" data-t="map">Mapa</button>
+    </div>
+    <div class="row">
+      <button class="pill" id="bLang2" data-t="language">English</button>
+      <button class="pill" id="bSound"></button>
+    </div>
+    <h2 style="margin-top:16px;font-size:20px" data-t="controls">Controles</h2>
+    <pre class="ctrl" id="ctrlText2"></pre>
+    <p style="font-size:12px;opacity:.7;margin:12px 0 0">Mapa: © OpenStreetMap contributors (ODbL) · Elevación y LiDAR: USGS 3DEP · Batimetría: NOAA NCEI CUDEM · Fotos aéreas: USDA NAIP, Esri World Imagery · Motor: three.js</p>
+  </div>
+</div>
+
+<div id="mapScreen" class="screen">
+  <div class="card" style="max-width:900px">
+    <h2><span data-t="map">Mapa</span> · <small style="font-size:15px" data-t="warp">Toca una bandera para viajar</small></h2>
+    <div id="mapWrap"><canvas id="bigmap" width="1200" height="840"></canvas></div>
+    <div id="maskList"></div>
+    <div class="row"><button class="pill primary" id="bMapClose" data-t="close">Cerrar</button></div>
+  </div>
+</div>
+
+<div id="confirm" class="screen">
+  <div class="card"><h2 data-t="confirmReset">¿Seguro?</h2>
+    <div class="row"><button class="pill pink" id="bYes" data-t="yes">Sí</button><button class="pill primary" id="bNo" data-t="no">No</button></div>
+  </div>
+</div>
+<div id="fade"></div>
+
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.venv/
+data/raw/
+dist/
+la-guancha.zip
+__pycache__/
+*.pyc
+.claude/

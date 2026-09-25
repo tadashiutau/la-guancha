@@ -1,0 +1,89 @@
+// Spanish first, English toggle.
+const STR = {
+  es: {
+    title: 'Chavos en La Guancha',
+    subtitle: 'Paseo Tablado · Ponce, Puerto Rico',
+    play: '¡A jugar!',
+    continue: 'Continuar',
+    newGame: 'Empezar de nuevo',
+    confirmReset: '¿Seguro? Se borra todo el progreso.',
+    yes: 'Sí, borrar', no: 'No',
+    loading: 'Cargando La Guancha…',
+    paused: 'Pausa',
+    resume: 'Seguir jugando',
+    map: 'Mapa',
+    masks: 'Máscaras',
+    language: 'English',
+    sound: 'Sonido',
+    on: 'Sí', off: 'No',
+    controls: 'Controles',
+    controlsTouch: 'Palanca: moverte · Arrastra a la derecha: cámara\n⤒ Saltar (salta 3 veces seguidas para el triple salto)\n🎩 Lanzar la pava (¡brinca encima de ella!)\n⤓ Agacharte · en el aire: ¡golpe al suelo!\nAgachado + saltar: salto mortal / salto largo corriendo\nGolpe al suelo + 🎩: clavado\nContra una pared: salta para rebotar\nEn el agua: ⤓ para bucear',
+    controlsKeys: 'WASD/flechas: moverte · Arrastra el ratón: cámara · Q/R: girar\nEspacio: saltar · E/J: pava · Shift/K: agacharte / golpe al suelo\nF: hablar · M: mapa · Esc: pausa',
+    gotMask: '¡Máscara conseguida!',
+    newMask: '¡Apareció una máscara!',
+    talk: 'Hablar',
+    warp: 'Toca una bandera para viajar',
+    checkpoint: '¡Bandera activada!',
+    coins: 'Chavos', conchas: 'Conchas',
+    unknown: '???',
+    time: 'Tiempo',
+    failed: '¡Se acabó el tiempo!',
+    buy: 'Comprar', cantAfford: 'No te alcanzan los chavos.', bye: 'Adiós',
+    shopMask: 'Máscara de Vejigante', shopShirt: 'Camisa de Ponce (roja y negra)', shopShirtOff: 'Guayabera blanca',
+    soldOut: 'Agotado',
+    wepa: '¡WEPA!',
+    allMasks: '¡Encontraste todas las máscaras de La Guancha!',
+    shards: 'Pedazos',
+    rings: 'Aros',
+    close: 'Cerrar',
+  },
+  en: {
+    title: 'Chavos at La Guancha',
+    subtitle: 'Boardwalk · Ponce, Puerto Rico',
+    play: "Let's play!",
+    continue: 'Continue',
+    newGame: 'New game',
+    confirmReset: 'Sure? All progress will be erased.',
+    yes: 'Yes, erase', no: 'No',
+    loading: 'Loading La Guancha…',
+    paused: 'Paused',
+    resume: 'Keep playing',
+    map: 'Map',
+    masks: 'Masks',
+    language: 'Español',
+    sound: 'Sound',
+    on: 'On', off: 'Off',
+    controls: 'Controls',
+    controlsTouch: 'Stick: move · Drag on the right: camera\n⤒ Jump (jump 3 times in a row for a triple jump)\n🎩 Throw the pava hat (bounce on it!)\n⤓ Crouch · in the air: ground pound!\nCrouch + jump: backflip / long jump while running\nGround pound + 🎩: dive\nAgainst a wall: jump to wall-kick\nIn water: ⤓ to swim down',
+    controlsKeys: 'WASD/arrows: move · Drag mouse: camera · Q/R: rotate\nSpace: jump · E/J: hat · Shift/K: crouch / ground pound\nF: talk · M: map · Esc: pause',
+    gotMask: 'You got a Mask!',
+    newMask: 'A Mask appeared!',
+    talk: 'Talk',
+    warp: 'Tap a flag to travel',
+    checkpoint: 'Flag activated!',
+    coins: 'Chavos', conchas: 'Conch shells',
+    unknown: '???',
+    time: 'Time',
+    failed: "Time's up!",
+    buy: 'Buy', cantAfford: "You don't have enough chavos.", bye: 'Bye',
+    shopMask: 'Vejigante Mask', shopShirt: 'Ponce shirt (red & black)', shopShirtOff: 'White guayabera',
+    soldOut: 'Sold out',
+    wepa: 'WEPA!',
+    allMasks: 'You found every mask in La Guancha!',
+    shards: 'Pieces',
+    rings: 'Rings',
+    close: 'Close',
+  },
+};
+
+let lang = 'es';
+try { lang = localStorage.getItem('guancha.lang') || 'es'; } catch (e) { /* storage blocked */ }
+
+export function t(key) { return (STR[lang] && STR[lang][key]) ?? STR.es[key] ?? key; }
+// pick from a {es, en} object
+export function tr(o) { return typeof o === 'string' ? o : (o[lang] ?? o.es); }
+export function getLang() { return lang; }
+export function setLang(l) {
+  lang = l;
+  try { localStorage.setItem('guancha.lang', l); } catch (e) { /* ignore */ }
+}
