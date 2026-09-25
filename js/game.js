@@ -71,6 +71,7 @@ export class Game {
     this.shop = {};
     this.blockInput = false;
     this.talking = false;
+    this.cinematic = null; // a running cutscene (see cutscene.js)
     this.timerState = null;
     this.playTime = 0;
     this.slot = 0;
@@ -221,6 +222,13 @@ export class Game {
   }
 
   updateMarkers(dt, now) {
+    if (this.cinematic) {
+      // cutscenes show no quest badges, beam or arrow
+      this.qMark.visible = false;
+      for (const n of this.npcs) if (n.badge) n.badge.visible = false;
+      this.ui.questArrow(null);
+      return;
+    }
     for (const n of this.npcs) {
       if (!n.quest) continue;
       const st = n.m.root.visible ? n.quest(this) : null;

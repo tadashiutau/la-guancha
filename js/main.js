@@ -161,7 +161,12 @@ function frame() {
   let dt = Math.min(clock.getDelta(), 1 / 20);
   const now = performance.now() / 1000;
   const inp = input.frame();
-  if (freecam?.on) {
+  if (game.cinematic) {
+    // a cutscene drives the camera; jump or talk skips it
+    if (inp.jumpPressed || inp.talkPressed) game.cinematic.skip();
+    game.cinematic.update(dt, now);
+    game.animateOnly(dt, now);
+  } else if (freecam?.on) {
     // debug fly-through: the world keeps animating but the player stays put
     if (inp.pausePressed) freecam.toggle(false);
     freecam.update(dt, inp, input.keys);

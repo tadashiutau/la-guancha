@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { tr } from './i18n.js';
 import * as M from './models.js';
+import { mothToTheMoon } from './cutscene.js';
 
 const line = (es, en) => ({ es, en });
 const label = (es, en) => ({ es, en });
@@ -120,6 +121,8 @@ export function buildMothQuest(g, places) {
         line('Si alguna vez da miedo la oscuridad, busca mis ojos verdes. Siempre voy a estar cerca.', 'If the dark ever feels frightening, look for my green eyes. I will always be close.'),
         line(`Te quiero mucho, ${g.playerName}. Ahora... ¿podemos quedarnos juntos en esta caja?`, `I love you very much, ${g.playerName}. Now... can we sit together in this box?`),
       ]);
+      // just for show: Moth spins off to the Moon, then comes home to her box
+      await mothToTheMoon(g, mothRoot, moth);
       next(6, 'meow');
       const P = g.player.pos;
       g.reveal('moth', P.x, P.y + 1.8, P.z);

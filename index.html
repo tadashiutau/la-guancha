@@ -97,6 +97,12 @@
   #maskList { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; font-size: 14px; }
   #maskList div { padding: 6px 8px; background: #f3ead7; border-radius: 10px; }
   #maskList div.got { background: #ffe39a; font-weight: 800; }
+  /* cutscenes: hide the HUD and slide in letterbox bars */
+  body.cine :is(#touch, .hud, #pauseBtn, #minimap, #qarrow, #stick, #stickHint, #btns, #bTalk) { visibility: hidden; }
+  body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 11vh; background: #000; z-index: 7; pointer-events: none; transition: transform .6s ease; }
+  body::before { top: 0; transform: translateY(-100%); }
+  body::after { bottom: 0; transform: translateY(100%); }
+  body.cine::before, body.cine::after { transform: none; }
   #fade { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 9; }
   #fade.on { opacity: 1; }
   #qarrow { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; display: none; z-index: 5; }
