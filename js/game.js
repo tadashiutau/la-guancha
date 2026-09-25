@@ -102,7 +102,20 @@ export class Game {
   coinRing(x, y, z, r, n) {
     for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; this.coin(x + Math.cos(a) * r, y, z + Math.sin(a) * r); }
   }
-  concha(x, y, z) { this.conchas.push({ x, y, z, alive: true, id: this.conchas.length }); }
+  concha(x, y, z) {
+    const nearest = this.flags.reduce((best, flag) => {
+      const d = Math.hypot(flag.x - x, flag.z - z);
+      return !best || d < best.d ? { id: flag.id, d } : best;
+    }, null);
+    this.conchas.push({ x, y, z, alive: true, id: this.conchas.length, region: nearest?.id || 'entrada' });
+  }
+
+  shellProgress() {
+    return this.flags.map(f => {
+      const shells = this.conchas.filter(c => c.region === f.id);
+      return { id: f.id, got: shells.filter(c => !c.alive).length, total: shells.length };
+    }).filter(region => region.total);
+  }
 
   mask(id, name, x, y, z, hidden = false) {
     const m = { id, name, x, y, z, got: false, active: !hidden, variant: this.masks.length };
@@ -540,7 +553,8 @@ export class Game {
         this.sfx.play('concha');
         this.fx.emit(c.x, c.y, c.z, 14, { color: 0xff9ec4, speed: 3, up: 3, life: 0.6 });
         const left = this.conchas.filter(c => c.alive).length;
-        ui.toast(`${t('conchas')}: ${this.conchaTotal - left}/${this.conchaTotal}`, 1.5);
+        const region = this.shellProgress().find(r => r.id === c.region);
+        ui.toast(`${t(`shellRegion_${c.region}`)}: ${region.got}/${region.total} · ${t('conchas')}: ${this.conchaTotal - left}/${this.conchaTotal}`, 2.1);
         this.save();
         if (left === 0) this.onAllConchas?.();
       }

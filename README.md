@@ -2,7 +2,7 @@
 
 A small Super Mario Odysseyâ€“style 3D exploration game set on the **Paseo Tablado La Guancha** in Ponce, Puerto Rico. It's built from real map data and runs in the browser on iPhone, Android tablets and desktop. The in-game text is Spanish first, with an English toggle.
 
-Collect **27 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it).
+Collect **28 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park, to begin a six-step mystery with marked clues and a final gift.
 
 ## Play it
 
@@ -24,7 +24,7 @@ The repo root is the game itself, so GitHub Pages serves it directly (Settings â
 ./build.sh
 ```
 
-This creates `dist/` and `la-guancha.zip` (about 5 MB). You can upload either one to Netlify Drop, Cloudflare Pages, etc.
+This creates `dist/` and `la-guancha.zip` (about 15 MB with the generated 3D models). You can upload either one to Netlify Drop, Cloudflare Pages, etc.
 
 ### Put it on the home screen (full screen, like an app)
 
@@ -44,6 +44,14 @@ This creates `dist/` and `la-guancha.zip` (about 5 MB). You can upload either on
 | Map / pause | II button | M / Esc |
 
 Choose one of three save slots before playing and name your character. Progress is saved in the browser automatically. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
+
+The pause map shows conch progress by area. Trees between the camera and the player fade so they do not hide the route. Moth's mystery has a quest marker at the park to start and a marker on every clue afterward; its progress stays in the selected save slot.
+
+## Generated models
+
+The conch, coin, vejigante mask and crate models in `assets/island-assets.glb` were generated with Higgsfield 3D Jutsu. The chest keeps its original animated lid. Moth's model was generated with Meshy from reference photos supplied by the project owner. `assets/moth-optimized.glb` is the in-game version: its dense fur mesh was reduced, vertex colors and normals were baked, and attributes were quantized. This brought it from 168 MB to 17.2 MB while preserving the cat's silhouette. The game's bright green eyes are separate geometry to keep her expression legible at this size.
+
+`assets/moth-meshy-original.glb.xz` is a lossless archive of the **untouched original Moth GLB**. Extract it with `xz -dk assets/moth-meshy-original.glb.xz` to compare or try another optimization. Claude is welcome to improve the downsizing while keeping Moth's features and browser performance. The 13 images in `assets/moth-reference/` are the owner's visual references; `IMG_0412.jpg` was uploaded to Meshy for the generation. Repository copies have camera metadata removed. Neither the original archive nor reference images are included in `dist/` or the playable zip.
 
 ## How the level was made
 

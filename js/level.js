@@ -7,6 +7,7 @@ import * as M from './models.js';
 import { Batch, P, rng } from './geo.js';
 import { buildProps } from './props.js';
 import { buildCrowd, FOOD_LINES } from './npcs.js';
+import { buildMothQuest } from './moth-quest.js';
 
 const L = (x, y) => [x * S, -y * S];
 const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -765,6 +766,15 @@ export function defineLevel(g) {
   yari.quest = g => (g.q.rings || g.q.yari ? null : 'available');
   const yariTalk = yari.talk;
   yari.talk = async g => { g.q.yari = true; g.save(); await yariTalk(g); };
+
+  // A clear starting marker in the park leads through five spooky, talkable clues.
+  const mothPark = { x: pkx + 4, z: pkz + 4 };
+  const mothKiosk = landSpot(fromNorth(0.38));
+  const mothMangrove = landSpot(fromNorth(0.78));
+  const mothTower = { x: tfx + 4, z: tfz - 3 };
+  const mothBeach = { x: bfx + 5, z: bfz + 4 };
+  buildMothQuest(g, { top, park: mothPark, kiosks: mothKiosk, tower: mothTower,
+    beach: mothBeach, mangrove: mothMangrove });
 
   buildProps(g, props);
   buildCrowd(g, along, fromNorth, total);

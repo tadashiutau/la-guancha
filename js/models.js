@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Batch, P } from './geo.js';
 import { makeModel } from './player.js';
+import { islandGeometry } from './model-assets.js';
 
 const lam = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o });
 const vmat = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -15,6 +16,8 @@ function single(fn) {
 
 // ---- coin: gold disk standing up
 export function coinGeometry() {
+  const generated = islandGeometry('coin', 3.5, true);
+  if (generated) return generated;
   return single(b => {
     b.add(P.cyl(14), 0xf7c948, 0, 0, 0, 0.7, 0.1, 0.7, 0, Math.PI / 2);
     b.add(P.box(), 0xc7921b, 0, 0, 0, 0.14, 0.4, 0.13);
@@ -23,6 +26,8 @@ export function coinGeometry() {
 
 // ---- concha: pink conch shell
 export function conchaGeometry() {
+  const generated = islandGeometry('conch', 2.4, true);
+  if (generated) return generated;
   return single(b => {
     b.add(P.cone(7), 0xf7a8c4, 0, 0.1, 0, 0.5, 0.75, 0.5, 0, 0, Math.PI * 0.6);
     b.add(P.sphere(8, 6), 0xffd1dc, -0.12, -0.05, 0, 0.45, 0.4, 0.38);
@@ -34,6 +39,12 @@ export function conchaGeometry() {
 // ---- vejigante mask (Ponce style: red face, many horns, polka dots)
 const HORN_COLS = [0xf7c948, 0x2e9e5b, 0x2f6fd0, 0xf7c948, 0x2e9e5b, 0x2f6fd0, 0xf7c948];
 export function maskMesh(variant = 0) {
+  const generated = variant % 4 === 0 && islandGeometry('mask', 2.65, true);
+  if (generated) {
+    const mesh = new THREE.Mesh(generated, lam(0xffffff, { vertexColors: true, emissive: 0x18130d }));
+    mesh.castShadow = true;
+    return mesh;
+  }
   const base = [0xe3342f, 0x2f6fd0, 0xf7c948, 0x2e9e5b][variant % 4];
   const dot = [0xf7c948, 0xffffff, 0xe3342f, 0xf7c948][variant % 4];
   const g = single(b => {
@@ -227,6 +238,80 @@ export function kittenMesh() {
   return g;
 }
 
+// Moth's round silhouette, green eyes, and cardboard-box obsession are based on
+// the supplied reference photos. Keep this lightweight for browser rendering.
+export function mothMesh() {
+  const generated = islandGeometry('moth', 0.6);
+  if (generated) {
+    generated.computeBoundingBox();
+    generated.translate(0, -generated.boundingBox.min.y, 0);
+    const g = new THREE.Group();
+    const mesh = new THREE.Mesh(generated, lam(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
+    mesh.castShadow = true;
+    g.add(mesh);
+    // The source texture's bright eyes vanish when its dense fur mesh is reduced.
+    // Small geometry eyes keep Moth's recognizable expression at game scale.
+    const iris = lam(0xb4d879, { emissive: 0x294917 });
+    const pupil = lam(0x0b1115);
+    const glint = lam(0xffffff, { emissive: 0x555555 });
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), iris);
+      eye.scale.set(0.87, 0.95, 0.48);
+      eye.position.set(s * 0.092, 0.91, 0.405);
+      g.add(eye);
+      const slit = new THREE.Mesh(new THREE.SphereGeometry(0.025, 10, 8), pupil);
+      slit.scale.set(0.7, 1.13, 0.45);
+      slit.position.set(s * 0.092, 0.91, 0.432);
+      g.add(slit);
+      const shine = new THREE.Mesh(new THREE.SphereGeometry(0.009, 8, 6), glint);
+      shine.position.set(s * 0.092 - 0.015, 0.927, 0.443);
+      g.add(shine);
+    }
+    g.scale.setScalar(0.75);
+    g.userData.tail = new THREE.Object3D(); // the baked mesh has its own tail
+    return g;
+  }
+  const g = new THREE.Group();
+  const fur = lam(0x17161b), lightFur = lam(0x26242a);
+  const eye = lam(0xb6d777, { emissive: 0x3b5622 });
+  const pupil = lam(0x101216), shine = lam(0xffffff);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), fur);
+  body.scale.set(1.12, 0.86, 1.18); body.position.set(0, 0.51, -0.08); g.add(body);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.33, 12, 10), lightFur);
+  chest.scale.set(1, 1.22, 0.63); chest.position.set(0, 0.56, 0.33); g.add(chest);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.39, 16, 12), fur);
+  head.scale.set(1.16, 0.95, 0.94); head.position.set(0, 0.88, 0.39); g.add(head);
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.34, 4), fur);
+    ear.position.set(s * 0.3, 1.2, 0.35); ear.rotation.z = -s * 0.17; ear.rotation.y = Math.PI / 4; g.add(ear);
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.19, 4), lam(0x59434b));
+    inner.position.set(s * 0.3, 1.2, 0.46); inner.rotation.z = -s * 0.17; inner.rotation.y = Math.PI / 4; g.add(inner);
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 10), eye);
+    iris.scale.z = 0.45; iris.position.set(s * 0.19, 0.94, 0.722); g.add(iris);
+    const slit = new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 8), pupil);
+    slit.scale.set(0.7, 1.5, 0.55); slit.position.set(s * 0.19, 0.94, 0.77); g.add(slit);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), shine);
+    glint.position.set(s * 0.19 - 0.03, 0.99, 0.79); g.add(glint);
+    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), fur);
+    paw.scale.set(0.9, 0.65, 1.25); paw.position.set(s * 0.32, 0.11, 0.48); g.add(paw);
+    for (const k of [-1, 0, 1]) {
+      const whisker = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.27, 3), lam(0xaaa7aa));
+      whisker.rotation.z = Math.PI / 2 + k * 0.22;
+      whisker.position.set(s * 0.43, 0.76 + k * 0.035, 0.7); g.add(whisker);
+    }
+  }
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 6), lam(0x45383e));
+  nose.scale.set(1, 0.65, 0.45); nose.position.set(0, 0.77, 0.76); g.add(nose);
+  const tail = new THREE.Group(); tail.position.set(0.38, 0.44, -0.53); g.add(tail);
+  for (let i = 0; i < 5; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.09 - i * 0.006, 8, 6), fur);
+    p.position.set(i * 0.095, i * 0.12, -i * 0.07); tail.add(p);
+  }
+  g.userData.tail = tail;
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
 export function iguanaMesh() {
   const g = new THREE.Group();
   const green = lam(0x5a9a3a);
@@ -242,6 +327,12 @@ export function iguanaMesh() {
 
 // ---- props
 export function crateMesh() {
+  const generated = islandGeometry('crate', [1.2, 1.8, 1.55], true);
+  if (generated) {
+    const mesh = new THREE.Mesh(generated, lam(0xffffff, { vertexColors: true }));
+    mesh.castShadow = true;
+    return mesh;
+  }
   const m = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.1, 1.1), lam(0xb07a3a));
   const edge = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.14, 1.14), lam(0x7a4e1e));
   m.add(edge);

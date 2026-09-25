@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { S } from './data.js';
 import { Batch, P, prismTris, hipRoofTris, polyArea, rng, prim } from './geo.js';
+import { buildFoliage } from './foliage.js';
 
 const C = {
   deck: 0x9a8570, deck2: 0x8b7762, rail: 0x7b3a26, piling: 0x5a4636,
@@ -34,6 +35,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   phys.terrainH = H;
   const R = rng(7);
   const batch = new Batch(60);
+  const foliageTrees = [];
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const info = { kiosks: [], deckY: 1, tablado: [], tower: null, boats: [], trees: [], piers: [], lampTops: [],
     pilings: [], signs: [], palmCrowns: [] };
@@ -482,10 +484,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
         0, Math.sin(dir) * ang, -Math.cos(dir) * ang, 0.1);
       px = nx; pz = nz; py += sh;
     }
+    const tree = { x: px, y: py - 0.25, z: pz, radius: 2.2, opacity: 1, pieces: [], refs: [] };
+    foliageTrees.push(tree);
     const fronds = 7;
     for (let i = 0; i < fronds; i++) {
       const a = i / fronds * Math.PI * 2 + R();
-      batch.add(frondGeo(), i % 2 ? C.palm : C.palm2, px, py, pz, 1.6 + R() * 0.5, 1, 1, a, 0, 0, 0.15);
+      tree.pieces.push({ kind: 'palm', color: i % 2 ? C.palm : C.palm2,
+        x: px, y: py, z: pz, sx: 1.6 + R() * 0.5, sy: 1, sz: 1, yaw: a });
     }
     for (let i = 0; i < 3; i++) batch.add(P.sphere(6, 4), C.coconut, px + Math.cos(i * 2.1) * 0.22, py - 0.2, pz + Math.sin(i * 2.1) * 0.22, 0.28, 0.28, 0.28);
     phys.addBox(x, z, 0.18, 0.18, 0, g - 0.5, g + h * 0.6, { tag: 'trunk', ground: false });
@@ -497,11 +502,15 @@ export function buildWorld(scene, data, phys, { mobile }) {
   function broadTree(x, g, z, h, r) {
     const th = h * 0.45;
     batch.add(P.frustum(0.7, 6), C.trunk, x, g + th / 2, z, 0.45, th, 0.45);
+    const tree = { x, y: g + th + r * 0.5, z, radius: r * 1.1, opacity: 1, pieces: [], refs: [] };
+    foliageTrees.push(tree);
     const blobs = 3;
     for (let i = 0; i < blobs; i++) {
       const a = R() * 6.28, d = r * 0.35;
       const s = r * (0.85 + R() * 0.35);
-      batch.add(P.dodeca(), R() < 0.5 ? C.tree : C.tree2, x + Math.cos(a) * d, g + th + s * 0.35 + i * 0.2, z + Math.sin(a) * d, s * 1.2, s * 0.8, s * 1.2, R() * 6, 0, 0, 0.18);
+      tree.pieces.push({ kind: 'broad', color: R() < 0.5 ? C.tree : C.tree2,
+        x: x + Math.cos(a) * d, y: g + th + s * 0.35 + i * 0.2,
+        z: z + Math.sin(a) * d, sx: s * 1.2, sy: s * 0.8, sz: s * 1.2, yaw: R() * 6 });
     }
     phys.addBox(x, z, 0.22, 0.22, 0, g - 0.5, g + th, { tag: 'trunk', ground: false });
     phys.add(circle(x, z, r * 0.8, 7), g + th + r * 0.3, g + th + r * 0.75, { tag: 'canopy', solid: false });
@@ -509,9 +518,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
   }
 
   function mangrove(x, g, z, h, r) {
+    const tree = { x, y: g + h * 0.65, z, radius: Math.max(1.2, r) * 1.2, opacity: 1, pieces: [], refs: [] };
+    foliageTrees.push(tree);
     for (let i = 0; i < 3; i++) {
       const a = R() * 6.28, d = r * 0.4, s = Math.max(1.2, r) * (0.9 + R() * 0.5);
-      batch.add(P.ico(0), C.mangrove, x + Math.cos(a) * d, g + h * 0.55 + i * 0.15, z + Math.sin(a) * d, s * 1.3, s * 0.8, s * 1.3, R() * 6, 0, 0, 0.2);
+      tree.pieces.push({ kind: 'mangrove', color: C.mangrove,
+        x: x + Math.cos(a) * d, y: g + h * 0.55 + i * 0.15,
+        z: z + Math.sin(a) * d, sx: s * 1.3, sy: s * 0.8, sz: s * 1.3, yaw: R() * 6 });
     }
     batch.add(P.cyl(5), C.trunk, x, g + h * 0.25, z, 0.25, h * 0.5, 0.25);
     phys.add(circle(x, z, Math.max(1.2, r) * 0.7, 6), g + h * 0.5, g + h * 0.8, { tag: 'canopy', solid: false });
@@ -596,11 +609,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
 
   const statics = batch.build(mat);
   scene.add(statics);
+  const fadeFoliage = buildFoliage(scene, foliageTrees, frondGeo());
+  info.foliageTrees = foliageTrees;
 
   // food signs over kiosks facing the boardwalk
   buildSigns(scene, info, tab);
 
-  return { info, water, sky, statics };
+  return { info, water, sky, statics, fadeFoliage };
 }
 
 function inPoly(x, z, pts) {

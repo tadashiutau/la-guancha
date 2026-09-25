@@ -80,7 +80,7 @@ export class UI {
       if (save) {
         const info = document.createElement('p');
         const minutes = Math.floor((save.time || 0) / 60);
-        info.textContent = `${(save.masks || []).length}/27 ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+        info.textContent = `${(save.masks || []).length}/${this.game?.masks.length || 28} ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
         card.append(info);
       }
       const row = document.createElement('div'); row.className = 'row';
@@ -393,6 +393,14 @@ export class UI {
     const [px, py] = this.toMap(p.x, p.z);
     g.fillStyle = '#ffd400'; g.strokeStyle = '#1b2330'; g.lineWidth = 4;
     g.beginPath(); g.arc(px, py, 11, 0, Math.PI * 2); g.fill(); g.stroke();
+    const progress = $('shellProgress');
+    progress.replaceChildren();
+    for (const region of game.shellProgress()) {
+      const item = document.createElement('div');
+      item.className = region.got === region.total ? 'done' : '';
+      item.textContent = `${t(`shellRegion_${region.id}`)} ${region.got}/${region.total}`;
+      progress.append(item);
+    }
     const list = $('maskList');
     list.innerHTML = '';
     game.masks.forEach((m, i) => {

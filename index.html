@@ -73,6 +73,9 @@
   .save-slot .pill { min-height: 42px; font-size: 14px; }
   #nameInput { width: 100%; padding: 12px 14px; border: 3px solid #2d6a4c; border-radius: 12px; font: inherit; font-size: 20px; user-select: text; -webkit-user-select: text; }
   #nameError { color: #b33a2a; min-height: 1.5em; }
+  #shellProgress { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin-top: 6px; }
+  #shellProgress div { padding: 7px 9px; border-radius: 10px; background: #f3ead7; font-size: 14px; font-weight: 800; }
+  #shellProgress div.done { background: #ffe39a; }
   #loadbar { height: 12px; background: #e6dcc6; border-radius: 8px; overflow: hidden; margin: 12px 0; }
   #loadbar div { height: 100%; width: 0; background: #2d6a4c; transition: width .2s; }
   #dialog { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); width: min(94vw, 620px); background: linear-gradient(170deg, #fffdf4, #fff2d9); color: var(--ink); border: 4px solid #2d6a4c; border-radius: 22px; padding: 16px 20px 12px; display: none; z-index: 8; font-size: 18px; box-shadow: 0 7px 0 #173b35, 0 14px 25px rgba(0,0,0,.35); }
@@ -187,7 +190,9 @@
 <div id="mapScreen" class="screen">
   <div class="card" style="max-width:900px">
     <h2><span data-t="map">Mapa</span> · <small style="font-size:15px" data-t="warp">Toca una bandera para viajar</small></h2>
-    <div id="mapWrap"><canvas id="bigmap" width="1200" height="840"></canvas></div>
+    <h2 style="margin:12px 0 0;font-size:20px" data-t="shellAreas">Conchas por zona</h2>
+    <div id="shellProgress"></div>
+    <div id="mapWrap" style="margin-top:12px"><canvas id="bigmap" width="1200" height="840"></canvas></div>
     <div id="maskList"></div>
     <div class="row"><button class="pill primary" id="bMapClose" data-t="close">Cerrar</button></div>
   </div>

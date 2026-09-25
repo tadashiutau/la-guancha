@@ -7,6 +7,7 @@ import { FollowCam } from './camera.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
 import { Game } from './game.js';
+import { loadIslandModels, loadMothModel } from './model-assets.js';
 import { UI } from './ui.js';
 import { t, getLang, setLang } from './i18n.js';
 import { migrateSave, copySave, moveSave, deleteSave } from './saves.js';
@@ -64,6 +65,9 @@ async function boot() {
   data = await loadData(p => ui.progress(p));
   lap('data');
   ui.progress(0.5);
+  await loadIslandModels();
+  await loadMothModel();
+  lap('models');
   await new Promise(r => setTimeout(r, 30));
   phys = new Physics();
   world = buildWorld(scene, data, phys, { mobile });
@@ -169,6 +173,7 @@ function frame() {
     cam.update(dt, player, { camDX: 0, camDY: 0 }, 0, 0);
     game.animateOnly(dt, now);
   }
+  world.fadeFoliage(camera, player.pos, dt);
   // light and shadow follow the player
   const P = player.pos;
   sun.position.set(P.x + SUN_DIR.x * 80, P.y + SUN_DIR.y * 80, P.z + SUN_DIR.z * 80);
