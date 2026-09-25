@@ -18,8 +18,7 @@ export class UI {
     $('bLang').onclick = $('bLang2').onclick = () => this.onLang();
     $('bSlotsBack').onclick = () => this.hideSlots();
     $('bToSlots').onclick = () => this.onToSlots();
-    $('bNameGo').onclick = () => this.submitName();
-    $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.submitName(); });
+    $('bEditChar').onclick = () => this.onEditChar?.();
     $('bYes').onclick = () => { $('confirm').classList.remove('show'); this.confirmed?.(); this.confirmed = null; };
     $('bNo').onclick = () => { $('confirm').classList.remove('show'); this.confirmed = null; };
     $('pauseBtn').addEventListener('pointerdown', e => { e.stopPropagation(); this.pause(true); });
@@ -52,7 +51,7 @@ export class UI {
     document.documentElement.lang = getLang();
     for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
     const touch = matchMedia('(pointer: coarse)').matches;
-    const ctrl = touch ? t('controlsTouch') : t('controlsKeys');
+    const ctrl = (touch ? t('controlsTouch') : t('controlsKeys')) + t('controlsPad');
     $('ctrlText').textContent = ctrl;
     $('ctrlText2').textContent = ctrl;
     $('bSound').textContent = `${t('sound')}: ${this.sfx.muted ? t('off') : t('on')}`;
@@ -134,19 +133,6 @@ export class UI {
     $('confirm').classList.add('show');
   }
 
-  promptName() {
-    $('nameInput').value = '';
-    $('nameError').textContent = '';
-    $('nameScreen').classList.add('show');
-    $('nameInput').focus();
-  }
-
-  submitName() {
-    const name = $('nameInput').value.trim().replace(/\s+/gu, ' ').slice(0, 20);
-    if (!name) { $('nameError').textContent = t('nameRequired'); return; }
-    $('nameScreen').classList.remove('show');
-    this.onName(name);
-  }
   error(e) {
     $('loadbar').style.display = 'none';
     $('ctrlText').textContent = 'Error: ' + (e && e.message || e);

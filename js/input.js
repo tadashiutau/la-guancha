@@ -1,5 +1,6 @@
 // Touch-first input: floating joystick on the left, camera drag on the right, three action buttons.
-// Keyboard/mouse fallback for desktop.
+// Keyboard/mouse fallback for desktop, and game controllers (a Bluetooth pad paired to a phone,
+// tablet or computer) through the standard Gamepad API, including menu navigation.
 export class Input {
   constructor(root) {
     this.mx = 0; this.my = 0;
@@ -109,8 +110,113 @@ export class Input {
     if (e.pointerType === 'mouse') this.mouseDown = false;
   }
 
+  // ---------------------------------------------------------------- game controllers
+  // Standard mapping: A jump, B talk, X/Y throw the pava, triggers/LB crouch, RB pava, Start pause,
+  // Select map, left stick/D-pad move, right stick camera. While a menu, a screen or dialog
+  // choices are open, the stick/D-pad moves a highlight between buttons, A picks and B backs out.
+  pollPad() {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    const gp = pads.find(p => p.mapping === 'standard') || pads[0];
+    if (!gp) { this.pad = null; return; }
+    const prev = this.padPrev || [];
+    const btn = i => !!gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5);
+    const hit = i => btn(i) && !prev[i];
+    this.padPrev = gp.buttons.map((_, i) => btn(i));
+    const dz = v => (Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82);
+    let lx = dz(gp.axes[0] || 0), ly = -dz(gp.axes[1] || 0);
+    lx += (btn(15) ? 1 : 0) - (btn(14) ? 1 : 0);
+    ly += (btn(12) ? 1 : 0) - (btn(13) ? 1 : 0);
+    const l = Math.hypot(lx, ly);
+    if (l > 1) { lx /= l; ly /= l; }
+    const rx = dz(gp.axes[2] || 0), ry = dz(gp.axes[3] || 0);
+    if (gp.buttons.some((b, i) => btn(i)) || l > 0 || rx || ry) {
+      if (!this.padActive) { this.padActive = true; document.body.classList.add('pad'); }
+    }
+    // menus first: if something is open, the pad drives it instead of the game
+    if (this.padNav(gp, { lx, ly, hit })) { this.pad = { mx: 0, my: 0 }; return; }
+    if (hit(0)) this.pressed.jump = true;
+    if (hit(1)) this.pressed.talk = true;
+    if (hit(2) || hit(3) || hit(5)) this.pressed.hat = true;
+    if (hit(4) || hit(6) || hit(7)) this.pressed.crouch = true;
+    if (hit(9)) this.pressed.pause = true;
+    if (hit(8)) this.pressed.map = true;
+    this.padHeld = { jump: btn(0), hat: btn(2) || btn(3) || btn(5), crouch: btn(4) || btn(6) || btn(7) };
+    if (rx || ry) { this.camDX += rx * 16; this.camDY += ry * 10; this.lastCamInput = performance.now() / 1000; }
+    this.pad = { mx: lx, my: ly };
+  }
+
+  padNav(gp, { lx, ly, hit }) {
+    // the topmost thing that wants buttons: dialog choices, then any open screen
+    const opts = document.querySelector('#dialog.show #dlgOpts');
+    let scope = opts && opts.children.length ? opts : null;
+    if (!scope) {
+      // the top one: highest z-index, and the later one in the page when they tie
+      const screens = [...document.querySelectorAll('.screen.show')].map((el, i) => ({ el, i, z: +getComputedStyle(el).zIndex || 0 }));
+      screens.sort((a, b) => b.z - a.z || b.i - a.i);
+      scope = screens[0]?.el || null;
+    }
+    if (!scope) { if (this.navEl) this.setNav(null); return false; }
+    const items = [...scope.querySelectorAll('button, input, [data-nav]')].filter(el => !el.disabled && !el.hidden && el.offsetParent !== null);
+    if (!items.length) return true;
+    if (!items.includes(this.navEl)) {
+      this.setNav(items.find(el => el.classList.contains('primary')) || items[0]);
+      const r = this.navEl.getBoundingClientRect(); this.navX = r.left + r.width / 2;
+    }
+    // one step per push of the stick (repeat while held)
+    const now = performance.now();
+    const dir = Math.abs(lx) > 0.5 || Math.abs(ly) > 0.5 ? (Math.abs(lx) > Math.abs(ly) ? [Math.sign(lx), 0] : [0, -Math.sign(ly)]) : null;
+    if (dir && (!this.navDir || this.navDir[0] !== dir[0] || this.navDir[1] !== dir[1] || now > this.navRepeat)) {
+      this.navRepeat = now + (this.navDir ? 180 : 380);
+      const next = this.nearest(items, this.navEl, dir);
+      if (next) {
+        // remember the column: up/down keep it, left/right set it
+        if (dir[0] || this.navX == null) { const r = next.getBoundingClientRect(); this.navX = r.left + r.width / 2; }
+        this.setNav(next);
+      }
+    }
+    this.navDir = dir;
+    if (hit(0)) {
+      const el = this.navEl;
+      if (el.tagName === 'INPUT') el.focus();
+      else if (el.onpointerdown) el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      else el.click();
+    }
+    // B backs out (a screen's [data-back] button, or resume from the pause menu); Start resumes
+    if (hit(1)) {
+      const back = scope.querySelector('[data-back]');
+      if (back && !back.hidden && back.offsetParent !== null) back.click();
+      else if (scope.id === 'menu') this.pressed.pause = true;
+    }
+    if (hit(9) && scope.id === 'menu') this.pressed.pause = true;
+    return true;
+  }
+
+  setNav(el) {
+    if (this.navEl) this.navEl.classList.remove('padfocus');
+    this.navEl = el;
+    if (el) { el.classList.add('padfocus'); el.scrollIntoView?.({ block: 'nearest' }); }
+  }
+
+  // the closest item in a direction (screen space), for moving the highlight
+  nearest(items, from, [dx, dy]) {
+    const r0 = from.getBoundingClientRect(), cy = r0.top + r0.height / 2;
+    const cx = dy && this.navX != null ? this.navX : r0.left + r0.width / 2;
+    let best = null, bd = Infinity;
+    for (const el of items) {
+      if (el === from) continue;
+      const r = el.getBoundingClientRect(), x = r.left + r.width / 2 - cx, y = r.top + r.height / 2 - cy;
+      const along = x * dx + y * dy;
+      if (along <= 2) continue;
+      const side = Math.abs(x * dy - y * dx);
+      const d = along + side * 6;
+      if (d < bd) { bd = d; best = el; }
+    }
+    return best;
+  }
+
   // snapshot for this frame; clears one-shot presses
   frame() {
+    this.pollPad();
     const k = this.keys;
     let kx = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
     let ky = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
@@ -119,9 +225,10 @@ export class Input {
     // Q/R rotate the camera from the keyboard
     const kr = (k.has('KeyQ') ? 1 : 0) - (k.has('KeyR') ? 1 : 0);
     if (kr) { this.camDX += kr * -6; this.lastCamInput = performance.now() / 1000; }
+    const ph = this.padHeld || {};
     const out = {
-      mx: this.tmx || kx, my: this.tmy || ky,
-      jump: this.held.jump, hat: this.held.hat, crouch: this.held.crouch,
+      mx: this.tmx || kx || this.pad?.mx || 0, my: this.tmy || ky || this.pad?.my || 0,
+      jump: this.held.jump || !!ph.jump, hat: this.held.hat || !!ph.hat, crouch: this.held.crouch || !!ph.crouch,
       jumpPressed: this.pressed.jump, hatPressed: this.pressed.hat, crouchPressed: this.pressed.crouch,
       talkPressed: this.pressed.talk, pausePressed: this.pressed.pause, mapPressed: this.pressed.map,
       camDX: this.camDX, camDY: this.camDY, zoom: this.zoom,

@@ -10,6 +10,7 @@ import { Game } from './game.js';
 import { loadIslandModels, loadMothModel } from './model-assets.js';
 import { UI } from './ui.js';
 import { FreeCam } from './freecam.js';
+import { Creator } from './creator.js';
 import { t, getLang, setLang } from './i18n.js';
 import { migrateSave, copySave, moveSave, deleteSave, markBad } from './saves.js';
 
@@ -139,10 +140,25 @@ ui.onSelectSlot = slot => {
   game.spawn();
   cam.snap(player);
   ui.hideSlots();
-  if (!game.playerName) ui.promptName();
-  else startGame();
+  if (!game.playerName) {
+    // a new game: make your character first
+    creator.open({ isNew: true }).then(r => {
+      game.playerName = r.name;
+      player.setChar(r.char);
+      game.save();
+      startGame();
+    });
+  } else startGame();
 };
-ui.onName = name => { game.playerName = name; game.save(); startGame(); };
+// Options → Edit character
+ui.onEditChar = () => {
+  creator.open({ name: game.playerName, char: player.char, isNew: false }).then(r => {
+    if (!r) return;
+    game.playerName = r.name;
+    player.setChar(r.char);
+    game.save();
+  });
+};
 ui.onCopySlot = (from, to) => copySave(from, to);
 ui.onMoveSlot = (from, to) => moveSave(from, to);
 ui.onDeleteSlot = slot => deleteSave(slot);
@@ -156,6 +172,7 @@ ui.onWarp = (x, y, z, face) => { player.teleport(x, y, z, face); cam.snap(player
 ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); game?.onLang(); };
 
 // ------------------------------------------------------------------ loop
+const creator = new Creator();
 const clock = new THREE.Clock();
 let fpsT = performance.now(), fpsN = 0;
 // Adaptive resolution: every 2 s of play, drop the render scale when frames run slow and raise it

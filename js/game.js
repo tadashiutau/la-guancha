@@ -5,6 +5,7 @@ import { t, tr } from './i18n.js';
 import * as M from './models.js';
 import { defineLevel } from './level.js';
 import { readSave, writeSave } from './saves.js';
+import { CHAR_DEFAULT } from './player.js';
 
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -401,7 +402,7 @@ export class Game {
       flags: this.flags.filter(f => f.on).map(f => f.id),
       crates: keys(this.crates.filter(c => c.broken)),
       spots: keys(this.spots.filter(c => c.used)),
-      q: this.q, rv: this.revealed, shop: this.shop, look: this.player.look, hat: this.player.hatStyle, time: Math.round(this.playTime),
+      q: this.q, rv: this.revealed, shop: this.shop, look: this.player.look, char: this.player.char, hat: this.player.hatStyle, time: Math.round(this.playTime),
       last: this.lastFlag, name: this.playerName,
     };
     writeSave(this.slot, s);
@@ -434,7 +435,9 @@ export class Game {
     for (const [id, p] of Object.entries(s.rv || {})) this.reveal(id, ...p, false);
     for (const id of s.masks || []) { const m = this.maskById(id); if (m) { m.got = true; m.group.visible = false; } }
     for (const id of s.flags || []) { const f = this.flags.find(f => f.id === id); if (f) this.lightFlag(f, true); }
-    if (s.look && s.look !== 'default') this.player.setLook(s.look);
+    // your character and outfit (saves from before the creator get the default look)
+    this.player.char = { ...CHAR_DEFAULT, ...(s.char || {}) };
+    this.player.setLook(s.look || 'default');
     if (s.hat === 'gold') this.player.setHat('gold');
     if (this.shop.shirt) (this.shop.outfits ??= {}).ponce = true; // older saves bought the Ponce shirt
     for (const c of this.challenges) c.onLoad?.();

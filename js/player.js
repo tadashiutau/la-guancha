@@ -25,12 +25,14 @@ export function makeHat(style = 'straw') {
   return g;
 }
 
+// look: { skin, hair, style, face, brows, shirt, shorts } (see CHAR_DEFAULT and OUTFITS)
 export function makeModel(look) {
   const root = new THREE.Group();
   const body = new THREE.Group(); // pivot at hips for flips and leans
   body.position.y = 0.52;
   root.add(body);
-  const skin = lam(look.skin), shirt = lam(look.shirt), shorts = lam(look.shorts), shoe = lam(0x5a3a22), dark = lam(0x1d1d1d);
+  const nose = new THREE.Color(look.skin).multiplyScalar(0.86).getHex();
+  const skin = lam(look.skin), shirt = lam(look.shirt), shorts = lam(look.shorts), shoe = lam(0x5a3a22), dark = lam(0x1d1d1d), hair = lam(look.hair);
   const torso = part(new THREE.CylinderGeometry(0.2, 0.23, 0.42, 10), shirt, 0, 0.2, 0, body);
   part(new THREE.BoxGeometry(0.03, 0.36, 0.02), lam(0xffffff), 0, 0.2, 0.225, body); // guayabera placket
   for (const s of [-1, 1]) part(new THREE.BoxGeometry(0.02, 0.34, 0.01), lam(0xe8e8e0), 0.1 * s, 0.2, 0.215, body);
@@ -38,14 +40,50 @@ export function makeModel(look) {
   headPivot.position.y = 0.44;
   body.add(headPivot);
   const head = part(new THREE.SphereGeometry(0.23, 14, 10), skin, 0, 0.18, 0, headPivot);
-  part(new THREE.SphereGeometry(0.235, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), lam(look.hair), 0, 0.2, -0.01, headPivot);
+  // hair
+  const style = look.style || 'corto';
+  if (style !== 'calvo') {
+    const cap = style === 'rapado' ? 0.36 : 0.45;
+    part(new THREE.SphereGeometry(style === 'rapado' ? 0.232 : 0.235, 12, 8, 0, Math.PI * 2, 0, Math.PI * cap), hair, 0, 0.2, -0.01, headPivot);
+  } else {
+    // a little fringe around the back, the rest shines
+    part(new THREE.TorusGeometry(0.2, 0.035, 5, 14, Math.PI), hair, 0, 0.19, -0.04, headPivot).rotation.set(Math.PI / 2, 0, Math.PI);
+  }
+  if (style === 'rizos') {
+    for (let i = 0; i < 9; i++) {
+      const a = i / 9 * Math.PI * 2, y = 0.33 + (i % 2) * 0.04;
+      part(new THREE.SphereGeometry(0.075, 7, 5), hair, Math.cos(a) * 0.17, y, Math.sin(a) * 0.17 - 0.02, headPivot);
+    }
+  } else if (style === 'largo') {
+    part(new THREE.CylinderGeometry(0.21, 0.19, 0.3, 12, 1, true, Math.PI * 0.55, Math.PI * 0.9), hair, 0, 0.1, -0.01, headPivot).material.side = THREE.DoubleSide;
+  } else if (style === 'mono') {
+    part(new THREE.SphereGeometry(0.09, 8, 6), hair, 0, 0.36, -0.16, headPivot);
+  } else if (style === 'trenzas') {
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) part(new THREE.SphereGeometry(0.05 - k * 0.006, 6, 5), hair, 0.2 * s, 0.1 - k * 0.075, -0.07, headPivot);
+  }
+  // eyes (grouped so they can blink), brows, ears, nose
+  const eyes = [], brows = [];
   for (const s of [-1, 1]) {
-    part(new THREE.SphereGeometry(0.045, 8, 6), lam(0xffffff), 0.085 * s, 0.21, 0.19, headPivot);
-    part(new THREE.SphereGeometry(0.026, 6, 4), dark, 0.085 * s, 0.21, 0.225, headPivot);
+    const e = new THREE.Group();
+    e.position.set(0.085 * s, 0.21, 0.19);
+    headPivot.add(e);
+    part(new THREE.SphereGeometry(0.045, 8, 6), lam(0xffffff), 0, 0, 0, e);
+    part(new THREE.SphereGeometry(0.026, 6, 4), dark, 0, 0, 0.035, e);
+    eyes.push(e);
+    if (look.brows !== false) {
+      const br = part(new THREE.BoxGeometry(0.075, 0.02, 0.02), hair, 0.085 * s, 0.275, 0.205, headPivot);
+      br.rotation.z = -0.12 * s;
+      brows.push(br);
+    }
     part(new THREE.SphereGeometry(0.05, 6, 4), skin, 0.235 * s, 0.17, 0, headPivot); // ears
   }
-  part(new THREE.SphereGeometry(0.05, 8, 6), lam(look.nose), 0, 0.15, 0.23, headPivot);
-  part(new THREE.BoxGeometry(0.16, 0.035, 0.04), lam(look.hair), 0, 0.1, 0.215, headPivot); // bigote
+  part(new THREE.SphereGeometry(0.05, 8, 6), lam(nose), 0, 0.15, 0.23, headPivot);
+  const face = look.face || 'bigote';
+  if (face === 'bigote' || face === 'barba') part(new THREE.BoxGeometry(0.16, 0.035, 0.04), hair, 0, 0.1, 0.215, headPivot);
+  if (face === 'barba') {
+    const b = part(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.35), hair, 0, 0.16, 0.035, headPivot);
+    b.scale.set(1.08, 1, 1.02);
+  }
   const hatSlot = new THREE.Group();
   hatSlot.position.set(0, 0.36, 0);
   headPivot.add(hatSlot);
@@ -66,17 +104,26 @@ export function makeModel(look) {
     part(new THREE.BoxGeometry(0.13, 0.08, 0.22), shoe, 0, -0.45, 0.04, l);
     legs.push(l);
   }
-  return { root, body, headPivot, hatSlot, arms, legs, torso, head };
+  return { root, body, headPivot, hatSlot, arms, legs, torso, head, eyes, brows };
 }
 
-export const LOOKS = {
-  default: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xfbfaf4, shorts: 0xc9b48a },
-  ponce: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xd12b2b, shorts: 0x1d1d1d },
-  // outfits from Doña Carmen's wardrobe
-  playa: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0x3fb8b0, shorts: 0xf2a93b },
-  pescador: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xb8a878, shorts: 0x2f3f5f },
-  bandera: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0x2f6fcf, shorts: 0xf4f2ec },
-  vejigante: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xf7c948, shorts: 0xd8262f },
+// the look you pick in the character creator
+export const CHAR_DEFAULT = { skin: 0x9c6a48, hair: 0x1f1a16, style: 'corto', face: 'bigote', shirt: 0xfbfaf4, shorts: 0xc9b48a };
+export const CHAR_OPTIONS = {
+  skin: [0xf1c9a5, 0xe0ac84, 0xc68a62, 0x9c6a48, 0x7a4e32, 0x5a3622],
+  hair: [0x1f1a16, 0x4a2e1c, 0x7a4a2a, 0xc89a50, 0x9a3a1a, 0xb8b4ac],
+  style: ['corto', 'rapado', 'rizos', 'largo', 'mono', 'trenzas', 'calvo'],
+  face: ['bigote', 'barba', 'nada'],
+  shirt: [0xfbfaf4, 0xf2c6d6, 0x9fd3e8, 0xf7e08a, 0xb8e0a8, 0x2b2b2b],
+  shorts: [0xc9b48a, 0x2f3f5f, 0x6a6a6a, 0x5a7a3a, 0x8a4a2a, 0xf4f2ec],
+};
+// outfits from Doña Carmen's wardrobe change only the clothes ('default' = your own)
+export const OUTFITS = {
+  ponce: { shirt: 0xd12b2b, shorts: 0x1d1d1d },
+  playa: { shirt: 0x3fb8b0, shorts: 0xf2a93b },
+  pescador: { shirt: 0xb8a878, shorts: 0x2f3f5f },
+  bandera: { shirt: 0x2f6fcf, shorts: 0xf4f2ec },
+  vejigante: { shirt: 0xf7c948, shorts: 0xd8262f },
 };
 
 export class Player {
@@ -98,7 +145,8 @@ export class Player {
     this.groundCol = null;
     this.events = [];        // 'pound', 'land', 'jump', 'splash'
     this.look = 'default';
-    this.m = makeModel(LOOKS.default);
+    this.char = { ...CHAR_DEFAULT };
+    this.m = makeModel(this.char);
     scene.add(this.m.root);
     this.hatStyle = 'straw';
     this.hatMesh = makeHat();
@@ -113,14 +161,24 @@ export class Player {
     this.phase = 0;
   }
 
+  // outfit name ('default' = the clothes picked in the character creator)
   setLook(name) {
+    this.look = OUTFITS[name] ? name : 'default';
+    this.rebuild();
+  }
+
+  setChar(char) {
+    this.char = { ...CHAR_DEFAULT, ...char };
+    this.rebuild();
+  }
+
+  rebuild() {
     const was = this.m.root;
     const hat = this.hatMesh;
-    this.m = makeModel(LOOKS[name] || LOOKS.default);
+    this.m = makeModel({ ...this.char, ...(OUTFITS[this.look] || {}) });
     this.scene.remove(was);
     this.scene.add(this.m.root);
     if (this.hat.state === 'on') this.m.hatSlot.add(hat);
-    this.look = name;
   }
 
   // swap the pava (straw or the golden one from the shop), wherever it is right now
@@ -533,7 +591,7 @@ export class Player {
       legX = [s * 0.9 * k, -s * 0.9 * k];
       armX = [-s * 0.8 * k, s * 0.8 * k];
       bodyX = k * 0.15;
-      bodyY += Math.abs(Math.cos(this.phase)) * 0.05 * k + (k < 0.1 ? Math.sin(performance.now() / 500) * 0.01 : 0);
+      bodyY += Math.abs(Math.cos(this.phase)) * 0.05 * k;
     } else if (st === 'slide') {
       bodyX = 1.35; bodyY = 0.2; armX = [-2.8, -2.8]; legX = [0.2, 0.2];
     } else if (st === 'air') {
@@ -565,10 +623,67 @@ export class Player {
       this.celebrate -= dt;
       armX = [-3, -3]; armZ = [0.3, -0.3]; legX = [0.3, -0.3];
     }
+    // idling: breathe, blink, look around, and after a while fidget (wipe the brow in the heat,
+    // stretch, tap a foot, peek at the sky) and finally sit down for a rest
+    let headY = 0, headX = 0, legZ = [0, 0];
+    const idle = st === 'ground' && sp < 0.3 && mag < 0.1 && !(this.throwAnim > 0) && !(this.celebrate > 0) && this.hat.state === 'on';
+    this.idleT = idle ? (this.idleT || 0) + dt : 0;
+    const now = performance.now() / 1000;
+    if (idle && this.idleT > 0.4) {
+      const breathe = Math.sin(now * 2.1);
+      bodyY += breathe * 0.008;
+      armZ = [0.12 + breathe * 0.03, -0.12 - breathe * 0.03];
+      m.torso.scale.set(1 + breathe * 0.02, 1, 1 + breathe * 0.02);
+      // glance around now and then
+      if (!this.lookT || now > this.lookT) { this.lookT = now + 2 + Math.random() * 3; this.lookTo = (Math.random() - 0.5) * 1.4; }
+      this.lookY = (this.lookY || 0) + ((this.lookTo || 0) - (this.lookY || 0)) * Math.min(1, dt * 3);
+      headY = this.lookY;
+      // a fidget every few seconds once you've stood still a while
+      if (this.idleT > 5 && !this.fidget && now > (this.fidgetNext || 0)) {
+        this.fidget = ['brow', 'stretch', 'tap', 'sky'][Math.floor(Math.random() * 4)];
+        this.fidgetT = 0;
+      }
+      if (this.fidget) {
+        this.fidgetT += dt;
+        const T = { brow: 2.2, stretch: 2.4, tap: 2.4, sky: 2.6 }[this.fidget];
+        const e = Math.sin(Math.min(1, this.fidgetT / T) * Math.PI); // ease in and out
+        if (this.fidget === 'brow') {
+          // wipe the forehead: it's hot in Ponce
+          armX[1] = -2.5 * e; armZ[1] = -0.2 - 1.1 * e + Math.sin(this.fidgetT * 9) * 0.15 * e;
+          headX = -0.1 * e;
+        } else if (this.fidget === 'stretch') {
+          armX = [-3.0 * e, -3.0 * e]; armZ = [0.35 * e, -0.35 * e];
+          bodyY += 0.03 * e; headX = -0.35 * e; bodyZ = Math.sin(this.fidgetT * 3) * 0.08 * e;
+        } else if (this.fidget === 'tap') {
+          legX[0] = -Math.abs(Math.sin(this.fidgetT * 8)) * 0.35 * e;
+          armZ = [0.5 * e, -0.5 * e]; armX = [0.3 * e, 0.3 * e]; // hands on the hips
+        } else if (this.fidget === 'sky') {
+          headX = -0.55 * e; headY *= 1 - e; armX[1] = -2.2 * e; armZ[1] = -0.5 * e; // shading the eyes
+        }
+        if (this.fidgetT > T) { this.fidget = null; this.fidgetNext = now + 3 + Math.random() * 4; }
+      }
+      // a long rest: sit down on the ground
+      if (this.idleT > 25) {
+        const k2 = Math.min(1, (this.idleT - 25) / 0.6);
+        bodyY -= 0.32 * k2;
+        legX = [-1.45 * k2, -1.45 * k2]; legZ = [0.18 * k2, -0.18 * k2];
+        armX = [0.35 * k2, 0.35 * k2]; armZ = [0.45 * k2, -0.45 * k2];
+        bodyX = -0.12 * k2;
+        this.fidget = null;
+      }
+    } else {
+      this.fidget = null;
+      m.torso.scale.set(1, 1, 1);
+    }
+    // blink every few seconds (and with every glance)
+    if (!this.blinkT || now > this.blinkT) this.blinkT = now + 2.5 + Math.random() * 3;
+    const b = this.blinkT - now < 0.12 ? 0.1 : 1;
+    for (const e of m.eyes || []) e.scale.y = b;
+    m.headPivot.rotation.set(headX, headY, 0);
     m.body.position.y = bodyY;
     m.body.rotation.set(bodyX, 0, bodyZ);
     m.arms.forEach((a, i) => { a.rotation.x = armX[i]; a.rotation.z = armZ[i]; });
-    m.legs.forEach((l, i) => { l.rotation.x = legX[i]; });
+    m.legs.forEach((l, i) => { l.rotation.x = legX[i]; l.rotation.z = legZ[i]; });
     const sq = this.squash > 0 ? 1 - this.squash * 1.2 : 1;
     m.root.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
     // blob shadow on whatever is below

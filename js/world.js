@@ -45,6 +45,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
     pilings: [], signs: [], palmCrowns: [] };
 
   carveUnderBoardwalk(data, W.tablado.map(wpts));
+  raiseBesideBoardwalk(data, W.tablado.map(wpts), 7 * S);
   buildTerrain(scene, data);
   buildRoutes(scene, data);
   const water = buildWater(scene, data);
@@ -56,16 +57,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   const deckQuads = [];
   const DW = 7 * S; // deck width
   for (const line of tab) {
-    // deck height from the land behind it
-    // sample the ground across the whole deck strip so grass never pokes through the planks
-    let top = 0;
-    for (let i = 0; i < line.length - 1; i++) {
-      const [ax, az] = line[i], [bx, bz] = line[i + 1];
-      const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
-      for (let s = 0; s <= len; s += 1.5)
-        for (let o = -DW; o <= DW; o += 0.7) top = Math.max(top, H(ax + ux * s - uz * o, az + uz * s + ux * o));
-    }
-    info.deckY = Math.max(0.95, Math.min(top + 0.1, 2.2));
+    info.deckY = deckHeight(line, H, DW);
     const y = info.deckY;
     for (let i = 0; i < line.length - 1; i++) {
       const [ax, az] = line[i], [bx, bz] = line[i + 1];
@@ -126,9 +118,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
 
   function buildBuilding(b) {
     const pts = wpts(b.p);
-    const base = b.b * S;
     const [rcx, rcy, rhx, rhy, rang, rectness] = b.r;
     const cx = rcx * S, cz = -rcy * S, hx = rhx * S, hz = rhy * S;
+    // the floor sits on the ground under the footprint (which may have been built up beside the
+    // boardwalk) and the walls reach down to the lowest point so nothing floats or gets buried
+    const hs = [...rectPts(cx, cz, hx, hz, rang), ...rectPts(cx, cz, hx * 0.5, hz * 0.5, rang), [cx, cz]].map(([x, z]) => H(x, z)).filter(h => h > -0.5);
+    const base = Math.max(b.b * S, hs.length ? Math.max(...hs) : -1e9);
+    const foot = Math.min(base - 0.3, hs.length ? Math.min(...hs) - 0.1 : base - 0.3);
     const area = b.r[2] * b.r[3] * 4;
     const dTab = Math.min(...tab.map(l => polyDist(cx, cz, l)));
     const roofCol = new THREE.Color().setRGB(b.rc[0] / 255, b.rc[1] / 255, b.rc[2] / 255, THREE.SRGBColorSpace);
@@ -155,13 +151,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
       // each kiosk gets one of the real color schemes (Street View): salmon stucco with cream trim,
       // maroon boards with a green base, turquoise, butter yellow...
       const sc = KIOSK_SCHEMES[info.kiosks.length % KIOSK_SCHEMES.length];
-      batch.addTris(prismTris(rect, base - 0.3, eave, false), sc.wall);
+      batch.addTris(prismTris(rect, foot, eave, false), sc.wall);
       // trim band and dark windows all around, a base band, cream pilasters
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.02, hz + 0.02, rang), eave - 0.18, eave, false), sc.trim);
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz * 0.7, rang), base + 0.75, base + 1.45, false), C.window);
       batch.addTris(prismTris(rectPts(cx, cz, hx * 0.8, hz + 0.03, rang), base + 0.75, base + 1.45, false), C.window);
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.05, hz + 0.05, rang), base + 0.72, base + 0.8, false), sc.trim);
-      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, rang), base - 0.3, base + 0.35, false), sc.base);
+      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, rang), foot, base + 0.35, false), sc.base);
       const kc = Math.cos(rang), ks = Math.sin(rang);
       const kat = (u, v) => [cx + u * kc + v * ks, cz - u * ks + v * kc];
       for (const [su, sv] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
@@ -193,34 +189,34 @@ export function buildWorld(scene, data, phys, { mobile }) {
       const slope = 0.55, cap = 1.4;
       batch.addTris(hipRoofTris(cx, cz, hx, hz, rang, eave, slope, cap, 0.45), C.kioskRoof);
       phys.add(rectPts(cx, cz, hx + 0.45, hz + 0.45, rang), eave - 0.3, eave, { tag: 'roof', roof: slope, cap });
-      phys.add(rect, base - 0.3, eave - 0.3, { tag: 'kiosk' });
+      phys.add(rect, foot, eave - 0.3, { tag: 'kiosk' });
       info.kiosks.push({ x: cx, z: cz, hx, hz, yaw: rang, base, eave, top: eave + Math.min(Math.min(hx, hz) * slope, cap), dTab });
       return;
     }
-    if (Math.hypot(rcx + 122.4, rcy + 27.3) < 2) { buildGateway(cx, cz, hx, hz, rang, base); return; }
+    if (Math.hypot(rcx + 122.4, rcy + 27.3) < 2) { buildGateway(cx, cz, hx, hz, rang, base, foot); return; }
     const h = Math.max(b.h * S, 2.2);
     const wall = area > 1500 ? 0xe9e4d8 : [0xf3e7c9, 0xe8d7b0, 0xf0d4c0, 0xdfe7ea][Math.floor(R() * 4)];
     const top = base + h;
     if (rectness > 0.8 && area < 900) {
       const rect = rectPts(cx, cz, hx, hz, rang);
       const eave = base + Math.min(h, 4.5 * S * 1.2);
-      batch.addTris(prismTris(rect, base - 0.3, eave, false), wall);
+      batch.addTris(prismTris(rect, foot, eave, false), wall);
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz + 0.03, rang), base + 0.9, base + 1.6, false), C.window);
       batch.addTris(hipRoofTris(cx, cz, hx, hz, rang, eave, 0.5, 2, 0.35), roofCol);
       phys.add(rectPts(cx, cz, hx + 0.35, hz + 0.35, rang), eave - 0.3, eave, { roof: 0.5, cap: 2, tag: 'roof' });
-      phys.add(rect, base - 0.3, eave - 0.3, { tag: 'bld' });
+      phys.add(rect, foot, eave - 0.3, { tag: 'bld' });
     } else {
-      batch.addTris(prismTris(pts, base - 0.3, top, false), wall);
+      batch.addTris(prismTris(pts, foot, top, false), wall);
       batch.addTris(prismTris(pts, top, top + 0.25, true), roofCol);
       if (h > 3) batch.addTris(prismTris(pts, base + 1.0, base + 1.5, false), C.window);
-      phys.add(pts, base - 0.3, top + 0.25, { tag: 'bld' });
+      phys.add(pts, foot, top + 0.25, { tag: 'bld' });
     }
   }
 
   // The long building behind the middle kiosks: cream walls with green trim and roofs, and the
   // entrance pavilion (raised roof, red-capped lantern, open archway) facing the paseo, as in
   // Street View
-  function buildGateway(cx, cz, hx, hz, yaw, base) {
+  function buildGateway(cx, cz, hx, hz, yaw, base, foot = foot) {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const at = (u, v) => [cx + u * c + v * s, cz - u * s + v * c];
     // which long side faces land (the paseo)?
@@ -228,20 +224,20 @@ export function buildWorld(scene, data, phys, { mobile }) {
     const eave = base + 3.3;
     const cream = 0xefe4c4, green = 0x2f6b4a, roof = 0x3a8f6e;
     const rect = rectPts(cx, cz, hx, hz, yaw);
-    batch.addTris(prismTris(rect, base - 0.3, eave, false), cream);
-    batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz + 0.03, yaw), base - 0.3, base + 0.4, false), 0xcdbf9c);
+    batch.addTris(prismTris(rect, foot, eave, false), cream);
+    batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz + 0.03, yaw), foot, base + 0.4, false), 0xcdbf9c);
     batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, yaw), eave - 0.3, eave, false), green);
     batch.addTris(prismTris(rectPts(cx, cz, hx + 0.02, hz * 0.8, yaw), base + 0.9, base + 1.9, false), C.window);
     batch.addTris(hipRoofTris(cx, cz, hx, hz, yaw, eave, 0.45, 2, 0.6), roof);
     phys.add(rectPts(cx, cz, hx + 0.6, hz + 0.6, yaw), eave - 0.3, eave, { roof: 0.45, cap: 2, tag: 'roof' });
-    phys.add(rect, base - 0.3, eave - 0.3, { tag: 'bld' });
+    phys.add(rect, foot, eave - 0.3, { tag: 'bld' });
     // green pilasters along the walls
     for (let u = -hx + 1.5; u <= hx - 1.4; u += 3.2)
       for (const v of [-1, 1]) { const [x, z] = at(u, v * (hz + 0.06)); batch.add(P.box(), green, x, (base + eave) / 2, z, 0.35, eave - base, 0.12, yaw); }
     // entrance pavilion: a taller block pushed out toward the paseo
     const gw = 3.6, gd = 2.4, gTop = base + 5.4;
     const [gx, gz] = at(0, side * (hz + gd / 2 - 0.4));
-    batch.addTris(prismTris(rectPts(gx, gz, gw, gd / 2, yaw), base - 0.3, gTop, false), cream);
+    batch.addTris(prismTris(rectPts(gx, gz, gw, gd / 2, yaw), foot, gTop, false), cream);
     batch.addTris(prismTris(rectPts(gx, gz, gw + 0.04, gd / 2 + 0.04, yaw), gTop - 0.35, gTop, false), green);
     batch.addTris(prismTris(rectPts(gx, gz, gw + 0.04, gd / 2 + 0.04, yaw), eave - 0.3, eave, false), green);
     // the open archway (dark) with a green frame, and a row of little windows above
@@ -252,7 +248,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
     for (let k = -3; k <= 3; k++) { const [x, z] = at(k * 0.9, side * (hz + gd - 0.4 + 0.03)); batch.add(P.box(), 0x3d5a6a, x, gTop - 1.0, z, 0.5, 0.5, 0.06, yaw); }
     batch.addTris(hipRoofTris(gx, gz, gw, gd / 2, yaw, gTop, 0.5, 1.6, 0.5), roof);
     phys.add(rectPts(gx, gz, gw + 0.5, gd / 2 + 0.5, yaw), gTop - 0.3, gTop, { roof: 0.5, cap: 1.6, tag: 'roof' });
-    phys.add(rectPts(gx, gz, gw, gd / 2, yaw), base - 0.3, gTop - 0.3, { tag: 'bld' });
+    phys.add(rectPts(gx, gz, gw, gd / 2, yaw), foot, gTop - 0.3, { tag: 'bld' });
     // the lantern on top with its red cap
     const lt = gTop + 0.6;
     batch.add(P.box(), cream, gx, lt + 0.4, gz, 1.4, 1.0, 1.4, yaw);
@@ -1063,6 +1059,63 @@ function frondGeo() {
 
 // The real tablado stands on pilings over the water, but the DEM shoreline runs right under it.
 // Dig the seabed out under the water half of the deck so you can swim beneath it.
+// deck height from the land behind it: sample the ground across the whole deck strip so grass
+// never pokes through the planks
+function deckHeight(line, H, DW) {
+  let top = 0;
+  for (let i = 0; i < line.length - 1; i++) {
+    const [ax, az] = line[i], [bx, bz] = line[i + 1];
+    const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+    for (let s = 0; s <= len; s += 1.5)
+      for (let o = -DW; o <= DW; o += 0.7) top = Math.max(top, H(ax + ux * s - uz * o, az + uz * s + ux * o));
+  }
+  return Math.max(0.95, Math.min(top + 0.1, 2.2));
+}
+
+// The deck sits at one height, so where the land behind it is lower it would float. Build the
+// ground up into a gentle embankment that meets the deck's land edge (and wraps around its ends),
+// never lowering anything.
+function raiseBesideBoardwalk(data, lines, DW) {
+  const { gw, gh, heights, step, X0, Z0, terrainH } = data;
+  for (const line of lines) {
+    const deckY = deckHeight(line, terrainH, DW);
+    const want = deckY - 0.1, FLAT = 5, FALL = 7;
+    // the land side of each segment, decided up front (before any heights change)
+    const segs = [];
+    for (let i = 0; i < line.length - 1; i++) {
+      const [ax, az] = line[i], [bx, bz] = line[i + 1];
+      const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+      let nx = -uz, nz = ux;
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      if (terrainH(mx + nx * 6, mz + nz * 6) > terrainH(mx - nx * 6, mz - nz * 6)) { nx = -nx; nz = -nz; }
+      segs.push({ ax, az, ux, uz, nx, nz, len, first: i === 0, last: i === line.length - 2 });
+    }
+    const raised = new Map();
+    for (const sg of segs) {
+      const { ax, az, ux, uz, nx, nz, len } = sg;
+      const pad = FLAT + FALL + 2;
+      const xs = [ax, ax + ux * len], zs = [az, az + uz * len];
+      const minI = Math.max(0, Math.floor((Math.min(...xs) - pad - X0) / step)), maxI = Math.min(gw - 1, Math.ceil((Math.max(...xs) + pad - X0) / step));
+      const minJ = Math.max(0, Math.floor((Math.min(...zs) - pad - Z0) / step)), maxJ = Math.min(gh - 1, Math.ceil((Math.max(...zs) + pad - Z0) / step));
+      for (let j = minJ; j <= maxJ; j++)
+        for (let k = minI; k <= maxI; k++) {
+          const x = X0 + k * step, z = Z0 + j * step;
+          const sAlong = (x - ax) * ux + (z - az) * uz, off = -((x - ax) * nx + (z - az) * nz); // off > 0: land side
+          if (off < -0.2) continue; // never on the water side
+          // distance from the deck's land edge, including past the deck's ends
+          const past = sAlong < 0 ? (sg.first ? -sAlong : Infinity) : sAlong > len ? (sg.last ? sAlong - len : Infinity) : 0;
+          if (past === Infinity) continue;
+          const d = Math.hypot(Math.max(0, off - 1.4), past);
+          if (d > FLAT + FALL) continue;
+          const h = d <= FLAT ? want : want - (d - FLAT) / FALL * (want - Math.min(want, heights[j * gw + k]));
+          const idx = j * gw + k;
+          raised.set(idx, Math.max(raised.get(idx) ?? -Infinity, h));
+        }
+    }
+    for (const [idx, h] of raised) if (heights[idx] < h && heights[idx] > -0.5) heights[idx] = h;
+  }
+}
+
 function carveUnderBoardwalk(data, lines) {
   const { gw, gh, heights, step, X0, Z0, terrainH } = data;
   for (const line of lines) {

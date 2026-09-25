@@ -82,6 +82,23 @@
   #dialog { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); width: min(94vw, 620px); background: linear-gradient(170deg, #fffdf4, #fff2d9); color: var(--ink); border: 4px solid #2d6a4c; border-radius: 22px; padding: 16px 20px 12px; display: none; z-index: 8; font-size: 18px; box-shadow: 0 7px 0 #173b35, 0 14px 25px rgba(0,0,0,.35); }
   #dialog.show { display: block; }
   #dlgOpts { max-height: 44vh; overflow-y: auto; }
+  [hidden] { display: none !important; }
+  #nameScreen { z-index: 12; }
+  /* game controller: hide the touch controls and show where the highlight is */
+  body.pad #btns, body.pad #stick, body.pad #stickHint { display: none !important; }
+  .padfocus { outline: 4px solid #f7c948 !important; outline-offset: 2px; box-shadow: 0 0 0 7px rgba(45,106,76,.55) !important; }
+  #nameScreen .card { max-width: 720px; }
+  .cwrap { display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; }
+  #charCanvas { flex: 0 0 200px; width: 200px; height: 300px; border-radius: 16px; background: linear-gradient(#8fd3f4, #f7e2b0); touch-action: none; cursor: grab; }
+  .cside { flex: 1 1 260px; min-width: 0; }
+  .crow { margin: 8px 0; }
+  .clabel { display: block; font-weight: 800; color: #2d6a4c; font-size: 14px; margin-bottom: 4px; }
+  .copts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .copt { border: 3px solid #d8cfbc; background: #fff; border-radius: 12px; padding: 6px 10px; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
+  .copt.on { border-color: #2d6a4c; box-shadow: 0 0 0 2px #f7c948; }
+  .copt.swatch { width: 34px; height: 34px; padding: 0; border-radius: 50%; }
+  @media (max-width: 520px) { #charCanvas { flex-basis: 100%; width: 100%; height: 220px; } }
+
   #dlgText { min-height: 3em; line-height: 1.45; }
   #dialog b { color: #b33a2a; font-weight: 900; }
   #dialog .next { text-align: right; font-size: 14px; color: #2d6a4c; animation: dlg-next 800ms ease-in-out infinite alternate; }
@@ -215,17 +232,27 @@
   <div class="card">
     <h2 data-t="chooseSave">Elige una partida</h2>
     <div id="saveSlots"></div>
-    <div class="row"><button class="pill" id="bSlotsBack" data-t="back">Volver</button></div>
+    <div class="row"><button class="pill" id="bSlotsBack" data-t="back" data-back>Volver</button></div>
   </div>
 </div>
 
 <div id="nameScreen" class="screen">
   <div class="card">
-    <h2 data-t="nameTitle">¿Cómo te llamas?</h2>
-    <p data-t="nameHelp">Los personajes te llamarán por este nombre.</p>
-    <input id="nameInput" maxlength="20" autocomplete="nickname" aria-label="Nombre" />
-    <p id="nameError" role="alert"></p>
-    <div class="row"><button class="pill primary" id="bNameGo" data-t="begin">¡Empezar!</button></div>
+    <h2 data-t="charTitle">Crea tu personaje</h2>
+    <div class="cwrap">
+      <canvas id="charCanvas" aria-hidden="true"></canvas>
+      <div class="cside">
+        <label class="clabel" for="nameInput" data-t="nameTitle">¿Cómo te llamas?</label>
+        <input id="nameInput" maxlength="20" autocomplete="nickname" aria-label="Nombre" />
+        <p id="nameError" role="alert"></p>
+        <div id="charRows"></div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="pill" id="bCharRandom" type="button" data-t="random">Al azar</button>
+      <button class="pill" id="bCharCancel" type="button" data-t="cancel" data-back hidden>Cancelar</button>
+      <button class="pill primary" id="bNameGo" type="button" data-t="begin">¡Empezar!</button>
+    </div>
   </div>
 </div>
 
@@ -268,7 +295,7 @@
           <button class="pill" id="bSound"></button>
           <button class="pill" id="bMusic"></button>
         </div>
-        <div class="row"><button class="pill" id="bToSlots" data-t="saveSlots">Partidas</button></div>
+        <div class="row"><button class="pill" id="bEditChar" data-t="editChar">Cambiar personaje</button><button class="pill" id="bToSlots" data-t="saveSlots">Partidas</button></div>
         <h3 data-t="controls">Controles</h3>
         <pre class="ctrl" id="ctrlText2"></pre>
         <p class="credits">Mapa: © OpenStreetMap contributors (ODbL) · Elevación y LiDAR: USGS 3DEP · Batimetría: NOAA NCEI CUDEM · Fotos aéreas: USDA NAIP, Esri World Imagery · Motor: three.js</p>
