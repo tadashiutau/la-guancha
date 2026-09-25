@@ -71,6 +71,7 @@ const HINTS = {
   gatito: { es: 'La nena del parque perdió su gatita.', en: 'The girl in the park lost her kitten.' },
   carrera: { es: 'Tito siempre reta a la gente a correr hasta la torre.', en: 'Tito always challenges people to race to the tower.' },
   jetski: { es: 'Marina te presta una motora acuática si aceptas su carrera de aros en el mar.', en: 'Marina will lend you a jet ski if you take on her sea ring race.' },
+  karts: { es: 'Cheo organiza el Gran Premio en el Paseo. Tres vueltas en kart... ¡cuidado con las chanclas!', en: 'Cheo runs the Grand Prix on the Paseo. Three kart laps... watch out for flying chanclas!' },
   aros: { es: 'En la arena hay un aro verde. Pásale por el medio.', en: 'There’s a green ring on the sand. Go through it.' },
   cocos: { es: 'Tírale la pava a los cocos de las palmas cerca de la rotonda del sur.', en: 'Throw your hat at the coconuts in the palms by the south roundabout.' },
   pedazos_parque: { es: 'Hay pedazos de máscara regados por el parque.', en: 'There are mask pieces scattered around the park.' },

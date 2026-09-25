@@ -55,10 +55,28 @@ export class Creator {
     }
   }
 
+  // options in four tabs; the preview camera moves in close for the face and hair
   buildRows() {
     const box = $('charRows');
     box.replaceChildren();
-    const row = (key, label, render) => {
+    const swatch = (b, v) => { b.classList.add('swatch'); b.style.background = hex(v); b.setAttribute('aria-label', hex(v)); };
+    const word = prefix => (b, v) => { b.textContent = t(prefix + v); };
+    const TABS = {
+      cara: [['skin', 'cSkin', swatch], ['eyes', 'cEyes', swatch], ['face', 'cFace', word('fh_')], ['glasses', 'cGlasses', word('gl_')]],
+      pelo: [['style', 'cStyle', word('hs_')], ['hair', 'cHair', swatch]],
+      cuerpo: [['build', 'cBuild', word('bd_')], ['height', 'cHeight', word('ht_')], ['extra', 'cExtra', word('ex_')]],
+      ropa: [['top', 'cTop', word('tp_')], ['shirt', 'cShirt', swatch], ['legs', 'cLegs', word('lg_')], ['shorts', 'cShorts', swatch], ['shoes', 'cShoes', word('sh_')]],
+    };
+    this.tab = TABS[this.tab] ? this.tab : 'cara';
+    const bar = document.createElement('div'); bar.className = 'ctabs';
+    for (const k of Object.keys(TABS)) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'ctab' + (k === this.tab ? ' on' : ''); b.textContent = t('ct_' + k);
+      b.onclick = () => { this.tab = k; this.buildRows(); };
+      bar.append(b);
+    }
+    box.append(bar);
+    for (const [key, label, render] of TABS[this.tab]) {
       const r = document.createElement('div'); r.className = 'crow';
       const l = document.createElement('div'); l.className = 'clabel'; l.textContent = t(label);
       const opts = document.createElement('div'); opts.className = 'copts';
@@ -75,15 +93,11 @@ export class Creator {
         opts.append(b);
       }
       r.append(l, opts); box.append(r);
-    };
-    const swatch = (b, v) => { b.classList.add('swatch'); b.style.background = hex(v); b.setAttribute('aria-label', hex(v)); };
-    const word = prefix => (b, v) => { b.textContent = t(prefix + v); };
-    row('skin', 'cSkin', swatch);
-    row('hair', 'cHair', swatch);
-    row('style', 'cStyle', word('hs_'));
-    row('face', 'cFace', word('fh_'));
-    row('shirt', 'cShirt', swatch);
-    row('shorts', 'cShorts', swatch);
+    }
+    // face and hair up close, clothes and body head to toe
+    const close = this.tab === 'cara' || this.tab === 'pelo';
+    this.camGoal = close ? [1.16, 2.2, 1.06] : [0.84, 3.2, 0.66];
+    if (this.hat) this.hat.visible = !close; // the pava off, so you can see the hair
   }
 
   startPreview() {
@@ -96,8 +110,7 @@ export class Creator {
     sun.position.set(2, 4, 3);
     this.scene.add(sun);
     this.cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
-    this.cam.position.set(0, 0.8, 3.7);
-    this.cam.lookAt(0, 0.62, 0);
+    this.camAt = [...(this.camGoal || [0.8, 3.7, 0.62])];
     this.spin = 0.4;
     // drag to turn the model
     let drag = null;
@@ -113,6 +126,10 @@ export class Creator {
         this.cam.aspect = w / h; this.cam.updateProjectionMatrix();
       }
       if (drag == null) this.spin += 0.006;
+      const g = this.camGoal || this.camAt;
+      for (let i = 0; i < 3; i++) this.camAt[i] += (g[i] - this.camAt[i]) * 0.12;
+      this.cam.position.set(0, this.camAt[0], this.camAt[1]);
+      this.cam.lookAt(0, this.camAt[2], 0);
       if (this.model) {
         const now = performance.now() / 1000;
         this.model.root.rotation.y = this.spin;
@@ -128,9 +145,14 @@ export class Creator {
 
   refresh() {
     if (!this.scene) return;
-    if (this.model) this.scene.remove(this.model.root);
+    if (this.model) {
+      this.scene.remove(this.model.root);
+      this.model.root.traverse(o => { if (o.isMesh && o.parent !== this.model.hatSlot) o.geometry.dispose(); });
+    }
     this.model = makeModel(this.char);
-    this.model.hatSlot.add(makeHat());
+    this.hat = makeHat();
+    this.hat.visible = !(this.tab === 'cara' || this.tab === 'pelo');
+    this.model.hatSlot.add(this.hat);
     this.scene.add(this.model.root);
   }
 }

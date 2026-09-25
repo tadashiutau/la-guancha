@@ -22,8 +22,15 @@ export class FollowCam {
     if (inp.zoom) this.dist = Math.max(4, Math.min(16, this.dist + inp.zoom * 0.8));
 
     const P = player.pos;
-    // swing behind the player while running, unless the camera was touched recently
-    if (now - lastCamInput > 1.5 && player.speed > 2 && player.state !== 'wall') {
+    if (this.chase) {
+      // racing (kart-race.js): stay tight behind, a little lower, whatever the stick does
+      let d = player.face + Math.PI - this.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      this.yaw += d * Math.min(1, dt * 7);
+      this.pitch += (0.26 - this.pitch) * Math.min(1, dt * 3);
+      this.dist += (6.2 - this.dist) * Math.min(1, dt * 3);
+    } else if (now - lastCamInput > 1.5 && player.speed > 2 && player.state !== 'wall') {
+      // swing behind the player while running, unless the camera was touched recently
       const want = player.face + Math.PI;
       let d = want - this.yaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -33,7 +40,7 @@ export class FollowCam {
     }
     // vertical follow: calm during jumps, catches up on landing or big falls
     const wantY = P.y + 1.2;
-    const grounded = player.grounded || player.state === 'swim';
+    const grounded = player.grounded || player.state === 'swim' || this.chase;
     const rate = grounded ? 5 : (wantY < this.ty - 2 || wantY > this.ty + 4 ? 4 : 0.8);
     this.ty += (wantY - this.ty) * Math.min(1, dt * rate);
     this.target.x += (P.x - this.target.x) * Math.min(1, dt * 12);

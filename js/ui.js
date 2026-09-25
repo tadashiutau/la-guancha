@@ -4,6 +4,39 @@ import { SLOT_COUNT, slotInfo, isMarkedBad } from './saves.js';
 
 const $ = id => document.getElementById(id);
 
+// ---- button prompts (Nintendo style, along the bottom edge): the glyph for each action on the
+// device you're using right now. Pads: Xbox A/B/X/Y, PlayStation ✕○□△, Nintendo B/A/Y/X (standard
+// mapping puts Nintendo's B at the bottom, where Xbox has A).
+const PAD = {
+  xbox: { a: ['A', '#3aa655'], b: ['B', '#d23b3b'], x: ['X', '#2f6fd0'], y: ['Y', '#e0b000'], r: ['RB'], l: ['LB'], start: ['☰'], stick: ['L'] },
+  ps: { a: ['✕', '#5b8def'], b: ['○', '#e0505a'], x: ['□', '#d77ab4'], y: ['△', '#3bb39a'], r: ['R1'], l: ['L1'], start: ['OPTIONS'], stick: ['L'] },
+  nintendo: { a: ['B'], b: ['A'], x: ['Y'], y: ['X'], r: ['R'], l: ['L'], start: ['+'], stick: ['L'] },
+};
+const ACTS = {
+  gas: { pad: 'a', keys: 'W', touch: '🕹️⬆' },
+  brake: { pad: 'b', keys: 'S', touch: '🕹️⬇' },
+  steer: { pad: 'stick', keys: 'A D', touch: '🕹️↔' },
+  drift: { pad: 'r', keys: 'Espacio|Space', touch: '⤒' },
+  item: { pad: 'x', keys: 'E', touch: '🎩' },
+  quit: { pad: 'l', keys: 'Shift', touch: '⤓' },
+  jump: { pad: 'a', keys: 'Espacio|Space', touch: '⤒' },
+  hat: { pad: 'x', keys: 'E', touch: '🎩' },
+  talk: { pad: 'b', keys: 'F', touch: '💬' },
+  next: { pad: 'a', keys: 'F', touch: '👆' },
+  pause: { pad: 'start', keys: 'Esc', touch: 'II' },
+};
+export function glyph(act, device, kind = 'xbox') {
+  const a = ACTS[act];
+  if (!a) return '';
+  if (device === 'pad') {
+    const [txt, col] = PAD[kind]?.[a.pad] || PAD.xbox[a.pad];
+    const round = ['a', 'b', 'x', 'y'].includes(a.pad);
+    return `<b class="gl ${round ? 'face' : 'pill'}"${col ? ` style="background:${col}"` : ''}>${txt}</b>`;
+  }
+  if (device === 'keys') { const k = a.keys.split('|'); return `<b class="gl key">${getLang() === 'en' ? k[k.length - 1] : k[0]}</b>`; }
+  return `<b class="gl tch">${a.touch}</b>`;
+}
+
 export class UI {
   constructor(sfx) {
     this.sfx = sfx;
@@ -26,6 +59,7 @@ export class UI {
     $('qtop').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); this.openMenu('quests'); });
     window.addEventListener('keydown', e => { if (e.code === 'KeyT' && e.target.tagName !== 'INPUT') this.game?.nextQuest(); });
     $('bResume').onclick = () => this.pause(false);
+    $('bQuitRide').onclick = () => { this.pause(false); this.onQuitRide?.(); };
     this.tab = 'map';
     for (const b of document.querySelectorAll('#mtabs button')) b.onclick = () => this.showTab(b.dataset.tab);
     $('bSound').onclick = () => {
@@ -96,7 +130,7 @@ export class UI {
       if (save) {
         const info = document.createElement('p');
         const minutes = Math.floor((save.time || 0) / 60);
-        info.textContent = `${(save.masks || []).length}/${this.game?.masks.length || 30} ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+        info.textContent = `${(save.masks || []).length}/${this.game?.masks.length || 31} ${t('masksFound')} · ${t('playTime')}: ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
         card.append(info);
       }
       const row = document.createElement('div'); row.className = 'row';
@@ -144,6 +178,7 @@ export class UI {
   }
   openMenu(tab = this.tab) {
     this.onPause(true);
+    $('bQuitRide').hidden = !this.game?.vehicle; // quit a race from the pause menu
     $('menu').classList.add('show');
     this.toggleQuestList(false);
     this.showTab(tab);
@@ -255,6 +290,35 @@ export class UI {
   }
 
   talkButton(show) { $('bTalk').classList.toggle('show', !!show); }
+
+  // what the prompts and the talk button should draw: called every frame, redraws on a change
+  setDevice(device, kind) {
+    const k = device + kind + getLang();
+    if (k === this.devKey) return;
+    this.devKey = k; this.device = device; this.padKind = kind;
+    $('bTalk').innerHTML = `${device === 'touch' ? '💬' : glyph('talk', device, kind)} <span data-t="talk">${t('talk')}</span>`;
+    $('dlgNext').innerHTML = device === 'pad' ? glyph('next', device, kind) : '▼';
+    this.renderPrompts();
+  }
+  // minigame controls along the bottom edge: prompts([{ act: 'gas', label: {es, en} }, ...]) or null
+  prompts(list) { this.promptList = list; this.renderPrompts(); }
+  renderPrompts() {
+    const el = $('prompts');
+    const list = this.promptList;
+    const dev = this.device || 'keys';
+    // on touch the on-screen buttons carry their own labels; the strip keeps what the stick does
+    const onButton = { drift: 'bJump', jump: 'bJump', item: 'bHat', hat: 'bHat', quit: 'bCrouch' };
+    for (const id of ['bJump', 'bHat', 'bCrouch']) delete $(id).dataset.cap;
+    const rest = (list || []).filter(p => {
+      if (dev !== 'touch' || !onButton[p.act]) return true;
+      $(onButton[p.act]).dataset.cap = tr(p.label);
+      return false;
+    });
+    el.hidden = !list || !rest.length;
+    if (el.hidden) return;
+    el.className = 'dev-' + dev;
+    el.innerHTML = rest.map(p => `<span class="pr">${glyph(p.act, dev, this.padKind)}${tr(p.label)}</span>`).join('');
+  }
 
   debug(s) {
     let d = $('dbg');

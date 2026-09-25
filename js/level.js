@@ -11,6 +11,8 @@ import { buildPaseoLife } from './paseo.js';
 import { buildMothQuest } from './moth-quest.js';
 import { buildAvesQuest } from './aves-quest.js';
 import { buildJetskiQuest } from './jetski-quest.js';
+import { buildWoodsCrowd } from './woods-crowd.js';
+import { buildKartRace } from './kart-race.js';
 
 const L = (x, y) => [x * S, -y * S];
 const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -227,6 +229,7 @@ export function defineLevel(g) {
   hidden('tienda', 'Máscara de la tienda de Doña Carmen', "A mask from Doña Carmen's shop");
   hidden('carrera', 'Carrera con Tito', 'Race with Tito');
   hidden('jetski', 'La carrera de Marina', "Marina's jet ski race");
+  hidden('karts', 'El Gran Premio de La Guancha', 'The La Guancha Grand Prix');
   hidden('aros', 'Los aros de la playa', 'The beach rings');
   hidden('cocos', 'Tumba los cocos', 'Knock down the coconuts');
   hidden('gatito', 'Mishu, la gatita perdida', 'Mishu the lost kitten');
@@ -1047,7 +1050,8 @@ export function defineLevel(g) {
   };
   const mothPark = mothSpot(pkx + 4, pkz + 4);
   buildMothQuest(g, { top, H, park: mothPark, carmen, carmenFace: Math.atan2(sf.nx, sf.nz), along, total, deckY });
-  buildAvesQuest(g, { top, H, onLane, dist2, center: L(380, 140) }); // the woods between the road and the beach
+  const aves = buildAvesQuest(g, { top, H, onLane, dist2, center: L(380, 140) }); // the woods between the road and the beach
+  buildWoodsCrowd(g, { top, H, dist2, center: L(380, 140), aves, roads: data.world.roads.map(r => r.p.map(([x, y]) => L(x, y))) });
 
   // ---------------------------------------------------------------- quest log entries (menu → Misiones)
   const Q = (es, en) => ({ es, en });
@@ -1102,6 +1106,7 @@ export function defineLevel(g) {
   buildProps(g, props);
   buildCrowd(g, along, fromNorth, total);
   buildPaseoLife(g);
+  buildKartRace(g); // after the paseo life: it closes the street (riders, bollards) while racing
   // no chavo stays buried in something solid: lift it on top
   for (const c of g.coins) {
     const hit = phys.near(c.x, c.z, 0.3).filter(k => k.solid && c.y > k.y0 && c.y - 0.3 < k.y1 && phys.sdist(k, c.x, c.z).inside);

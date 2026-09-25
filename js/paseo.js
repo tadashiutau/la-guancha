@@ -7,7 +7,7 @@
 // and scooters and people out for a walk.
 import * as THREE from 'three';
 import { S } from './data.js';
-import { P, rng } from './geo.js';
+import { P, rng, Batch } from './geo.js';
 import * as M from './models.js';
 
 export const PASEO_W = 13; // paved width in meters (the old street plus its sidewalks)
@@ -90,15 +90,23 @@ export function buildPaseoStreet({ data, batch, phys, H, info, palm, broadTree, 
   }
   const nearCrossing = (t, d) => crossings.some(c => Math.abs(c - t) < d) || mouths.some(m => Math.abs(m.t - t) < m.w / 2 + d);
 
-  // ---- bollards: across both ends and across every road mouth, so cars stay out
-  const bollard = (x, z) => {
-    const g = H(x, z);
-    batch.add(P.cyl(8), 0xe9e6de, x, g + 0.42, z, 0.26, 0.84, 0.26);
-    batch.add(P.cyl(8), 0xd8262f, x, g + 0.7, z, 0.27, 0.1, 0.27);
-    batch.add(P.sphere(8, 4), 0xe9e6de, x, g + 0.84, z, 0.26, 0.14, 0.26);
-    phys.addBox(x, z, 0.13, 0.13, 0, g - 0.2, g + 0.9, { tag: 'bollard' });
+  // ---- bollards: across both ends and across every road mouth, so cars stay out. The two end
+  // rows are retractable (their own mesh, see buildPaseoLife): they sink into the street for the
+  // kart race (kart-race.js).
+  out.gates = [];
+  const bollard = (x, z, gate) => {
+    const g = H(x, z), b = gate ? gate.batch : batch;
+    b.add(P.cyl(8), 0xe9e6de, x, g + 0.42, z, 0.26, 0.84, 0.26);
+    b.add(P.cyl(8), 0xd8262f, x, g + 0.7, z, 0.27, 0.1, 0.27);
+    b.add(P.sphere(8, 4), 0xe9e6de, x, g + 0.84, z, 0.26, 0.14, 0.26);
+    const c = phys.addBox(x, z, 0.13, 0.13, 0, g - 0.2, g + 0.9, { tag: 'bollard' });
+    if (gate) gate.cols.push(c);
   };
-  for (const t of [4.5, L - 30]) for (let o = -F.half + 0.8; o <= F.half - 0.7; o += 1.9) bollard(...F.at(t, o));
+  for (const t of [4.5, L - 30]) {
+    const gate = { t, batch: new Batch(1e7), cols: [] };
+    for (let o = -F.half + 0.8; o <= F.half - 0.7; o += 1.9) bollard(...F.at(t, o), gate);
+    out.gates.push(gate);
+  }
   for (const m of mouths) {
     // a row across the road where it meets the paseo
     for (let k = -m.w / 2 + 0.6; k <= m.w / 2 - 0.5; k += 1.9)
@@ -273,6 +281,15 @@ export function buildPaseoLife(g) {
   const H = data.terrainH;
   const ph = g.phys;
 
+  // the retractable bollard rows at both ends (kart-race.js lowers them)
+  const gateMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  g.paseoGates = (info.gates || []).map(gt => {
+    const mesh = gt.batch.build(gateMat).children[0];
+    mesh.matrixAutoUpdate = true;
+    g.root.add(mesh);
+    return { t: gt.t, mesh, cols: gt.cols };
+  });
+
   // ---- Héctor Lavoe, "El Cantante de los Cantantes", born in Ponce: bronze on a stone pedestal
   {
     const { t, o } = info.statue;
@@ -295,7 +312,7 @@ export function buildPaseoLife(g) {
       const dx = px - x, dz = pz - z, c = Math.cos(face), s = Math.sin(face);
       return [x + dx * c + dz * s, z - dx * s + dz * c];
     }), gy - 0.2, gy + 1.1, { tag: 'statue' });
-    const bronze = { skin: 0x8a6436, hair: 0x5e4426, shirt: 0x7a5530, bottom: 0x6a4a2a, dress: false, hat: 'none', stache: true, scale: 1.08 };
+    const bronze = { skin: 0x8a6436, hair: 0x5e4426, shirt: 0x7a5530, bottom: 0x6a4a2a, dress: false, hat: 'none', stache: true, scale: 1.08, mono: 0x7a5530, glasses: 'sol', style: 'ondas', legs: 'largos', shoes: 'zapatos' };
     const n = g.npc(bronze, { es: 'Placa', en: 'Plaque' }, x, z, face, null, { y: gy + 1.1, custom: true, fixed: true });
     // singing: head tipped back, one hand with the microphone up at the mouth, the other out
     n.m.headPivot.rotation.x = -0.2;
@@ -307,10 +324,6 @@ export function buildPaseoLife(g) {
     const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.02, 0.2, 6), new THREE.MeshLambertMaterial({ color: 0x4a3a22 }));
     mic.position.set(0, -0.42, 0.04);
     n.m.arms[1].add(mic);
-    // sunglasses, his trademark
-    const shades = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.07, 0.04), new THREE.MeshLambertMaterial({ color: 0x3a2a18 }));
-    shades.position.set(0, 0.21, 0.23);
-    n.m.headPivot.add(shades);
     n.talk = async (game) => game.ui.say({ es: 'Placa', en: 'Plaque' }, [
       { es: 'HÉCTOR LAVOE · "El Cantante de los Cantantes" · Ponce, 1946 – 1993.', en: 'HÉCTOR LAVOE · "The Singer of Singers" · Ponce, 1946 – 1993.' },
       { es: 'Nació en el barrio Machuelo de Ponce y llevó la salsa de Puerto Rico al mundo.', en: 'Born in Ponce’s Machuelo neighborhood, he took Puerto Rico’s salsa to the world.' },
@@ -378,6 +391,7 @@ export function buildPaseoLife(g) {
     };
     riders.push(rd);
   };
+  g.paseoRiders = riders; // the kart race clears the street
   for (let i = 0; i < 3; i++) make(i, 'bike');
   for (let i = 0; i < 2; i++) make(i + 3, 'scooter');
   for (let i = 0; i < 4; i++) make(i, 'walk');

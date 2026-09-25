@@ -1,6 +1,7 @@
 // The jíbaro explorer: an Odyssey-style character controller with a throwable pava (straw hat).
 import * as THREE from 'three';
 import { STEP } from './physics.js';
+import { buildFigure, STYLES, FACES, TOPS } from './figure.js';
 
 const RUN = 8.2, SWIM = 4.6, GRAV_UP = 27, GRAV_DOWN = 40, TERMINAL = -32;
 const WATER_Y = 0, FLOAT_Y = -0.6;
@@ -25,105 +26,40 @@ export function makeHat(style = 'straw') {
   return g;
 }
 
-// look: { skin, hair, style, face, brows, shirt, shorts } (see CHAR_DEFAULT and OUTFITS)
+// the player's figure (see figure.js): blinking eyes, the pava sits in hatSlot
 export function makeModel(look) {
-  const root = new THREE.Group();
-  const body = new THREE.Group(); // pivot at hips for flips and leans
-  body.position.y = 0.52;
-  root.add(body);
-  const nose = new THREE.Color(look.skin).multiplyScalar(0.86).getHex();
-  const skin = lam(look.skin), shirt = lam(look.shirt), shorts = lam(look.shorts), shoe = lam(0x5a3a22), dark = lam(0x1d1d1d), hair = lam(look.hair);
-  const torso = part(new THREE.CylinderGeometry(0.2, 0.23, 0.42, 10), shirt, 0, 0.2, 0, body);
-  part(new THREE.BoxGeometry(0.03, 0.36, 0.02), lam(0xffffff), 0, 0.2, 0.225, body); // guayabera placket
-  for (const s of [-1, 1]) part(new THREE.BoxGeometry(0.02, 0.34, 0.01), lam(0xe8e8e0), 0.1 * s, 0.2, 0.215, body);
-  const headPivot = new THREE.Group();
-  headPivot.position.y = 0.44;
-  body.add(headPivot);
-  const head = part(new THREE.SphereGeometry(0.23, 14, 10), skin, 0, 0.18, 0, headPivot);
-  // hair
-  const style = look.style || 'corto';
-  if (style !== 'calvo') {
-    const cap = style === 'rapado' ? 0.36 : 0.45;
-    part(new THREE.SphereGeometry(style === 'rapado' ? 0.232 : 0.235, 12, 8, 0, Math.PI * 2, 0, Math.PI * cap), hair, 0, 0.2, -0.01, headPivot);
-  } else {
-    // a little fringe around the back, the rest shines
-    part(new THREE.TorusGeometry(0.2, 0.035, 5, 14, Math.PI), hair, 0, 0.19, -0.04, headPivot).rotation.set(Math.PI / 2, 0, Math.PI);
-  }
-  if (style === 'rizos') {
-    for (let i = 0; i < 9; i++) {
-      const a = i / 9 * Math.PI * 2, y = 0.33 + (i % 2) * 0.04;
-      part(new THREE.SphereGeometry(0.075, 7, 5), hair, Math.cos(a) * 0.17, y, Math.sin(a) * 0.17 - 0.02, headPivot);
-    }
-  } else if (style === 'largo') {
-    part(new THREE.CylinderGeometry(0.21, 0.19, 0.3, 12, 1, true, Math.PI * 0.55, Math.PI * 0.9), hair, 0, 0.1, -0.01, headPivot).material.side = THREE.DoubleSide;
-  } else if (style === 'mono') {
-    part(new THREE.SphereGeometry(0.09, 8, 6), hair, 0, 0.36, -0.16, headPivot);
-  } else if (style === 'trenzas') {
-    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) part(new THREE.SphereGeometry(0.05 - k * 0.006, 6, 5), hair, 0.2 * s, 0.1 - k * 0.075, -0.07, headPivot);
-  }
-  // eyes (grouped so they can blink), brows, ears, nose
-  const eyes = [], brows = [];
-  for (const s of [-1, 1]) {
-    const e = new THREE.Group();
-    e.position.set(0.085 * s, 0.21, 0.19);
-    headPivot.add(e);
-    part(new THREE.SphereGeometry(0.045, 8, 6), lam(0xffffff), 0, 0, 0, e);
-    part(new THREE.SphereGeometry(0.026, 6, 4), dark, 0, 0, 0.035, e);
-    eyes.push(e);
-    if (look.brows !== false) {
-      const br = part(new THREE.BoxGeometry(0.075, 0.02, 0.02), hair, 0.085 * s, 0.275, 0.205, headPivot);
-      br.rotation.z = -0.12 * s;
-      brows.push(br);
-    }
-    part(new THREE.SphereGeometry(0.05, 6, 4), skin, 0.235 * s, 0.17, 0, headPivot); // ears
-  }
-  part(new THREE.SphereGeometry(0.05, 8, 6), lam(nose), 0, 0.15, 0.23, headPivot);
-  const face = look.face || 'bigote';
-  if (face === 'bigote' || face === 'barba') part(new THREE.BoxGeometry(0.16, 0.035, 0.04), hair, 0, 0.1, 0.215, headPivot);
-  if (face === 'barba') {
-    const b = part(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.35), hair, 0, 0.16, 0.035, headPivot);
-    b.scale.set(1.08, 1, 1.02);
-  }
-  const hatSlot = new THREE.Group();
-  hatSlot.position.set(0, 0.36, 0);
-  headPivot.add(hatSlot);
-  const arms = [], legs = [];
-  for (const s of [-1, 1]) {
-    const a = new THREE.Group();
-    a.position.set(0.25 * s, 0.37, 0);
-    body.add(a);
-    part(new THREE.CylinderGeometry(0.075, 0.07, 0.16, 8), shirt, 0, -0.07, 0, a);
-    part(new THREE.CylinderGeometry(0.055, 0.05, 0.2, 8), skin, 0, -0.24, 0, a);
-    part(new THREE.SphereGeometry(0.07, 8, 6), skin, 0, -0.36, 0, a);
-    arms.push(a);
-    const l = new THREE.Group();
-    l.position.set(0.1 * s, 0.0, 0);
-    body.add(l);
-    part(new THREE.CylinderGeometry(0.1, 0.09, 0.2, 8), shorts, 0, -0.08, 0, l);
-    part(new THREE.CylinderGeometry(0.06, 0.055, 0.24, 8), skin, 0, -0.3, 0, l);
-    part(new THREE.BoxGeometry(0.13, 0.08, 0.22), shoe, 0, -0.45, 0.04, l);
-    legs.push(l);
-  }
-  return { root, body, headPivot, hatSlot, arms, legs, torso, head, eyes, brows };
+  return buildFigure(look, { blink: true });
 }
 
 // the look you pick in the character creator
-export const CHAR_DEFAULT = { skin: 0x9c6a48, hair: 0x1f1a16, style: 'corto', face: 'bigote', shirt: 0xfbfaf4, shorts: 0xc9b48a };
+export const CHAR_DEFAULT = {
+  skin: 0x9c6a48, hair: 0x1f1a16, eyes: 0x4a2e1c, style: 'corto', face: 'bigote', glasses: 'nada',
+  build: 'normal', height: 'normal', extra: 'nada',
+  top: 'guayabera', shirt: 0xfbfaf4, legs: 'cortos', shorts: 0xc9b48a, shoes: 'tenis',
+};
 export const CHAR_OPTIONS = {
-  skin: [0xf1c9a5, 0xe0ac84, 0xc68a62, 0x9c6a48, 0x7a4e32, 0x5a3622],
-  hair: [0x1f1a16, 0x4a2e1c, 0x7a4a2a, 0xc89a50, 0x9a3a1a, 0xb8b4ac],
-  style: ['corto', 'rapado', 'rizos', 'largo', 'mono', 'trenzas', 'calvo'],
-  face: ['bigote', 'barba', 'nada'],
-  shirt: [0xfbfaf4, 0xf2c6d6, 0x9fd3e8, 0xf7e08a, 0xb8e0a8, 0x2b2b2b],
-  shorts: [0xc9b48a, 0x2f3f5f, 0x6a6a6a, 0x5a7a3a, 0x8a4a2a, 0xf4f2ec],
+  skin: [0xf6d3b3, 0xf1c9a5, 0xe0ac84, 0xc68a62, 0xb07a55, 0x9c6a48, 0x7a4e32, 0x5a3622],
+  eyes: [0x4a2e1c, 0x2a1a10, 0x7a5a2a, 0x5a7a3a, 0x3a6a9a, 0x6a7a80],
+  face: FACES,
+  glasses: ['nada', 'lentes', 'sol'],
+  style: STYLES,
+  hair: [0x1f1a16, 0x3a2418, 0x6a3f22, 0x9a5a2a, 0xc89a50, 0xe8c878, 0x9a3a1a, 0xb8b4ac, 0xece8e0, 0x2f5fbf, 0xd8508a],
+  build: ['flaco', 'normal', 'fornido', 'gordito'],
+  height: ['bajito', 'normal', 'alto'],
+  extra: ['nada', 'cadena', 'arete', 'reloj'],
+  top: TOPS,
+  shirt: [0xfbfaf4, 0xf2c6d6, 0x9fd3e8, 0xf7e08a, 0xb8e0a8, 0xd12b2b, 0x2f6fcf, 0xf28b3a, 0x7a4ab8, 0x2b2b2b],
+  legs: ['cortos', 'largos'],
+  shorts: [0xc9b48a, 0x2f3f5f, 0x4a6fa5, 0x6a6a6a, 0x5a7a3a, 0x8a4a2a, 0xf4f2ec, 0x1d1d1d],
+  shoes: ['tenis', 'chancletas', 'zapatos'],
 };
 // outfits from Doña Carmen's wardrobe change only the clothes ('default' = your own)
 export const OUTFITS = {
-  ponce: { shirt: 0xd12b2b, shorts: 0x1d1d1d },
-  playa: { shirt: 0x3fb8b0, shorts: 0xf2a93b },
-  pescador: { shirt: 0xb8a878, shorts: 0x2f3f5f },
-  bandera: { shirt: 0x2f6fcf, shorts: 0xf4f2ec },
-  vejigante: { shirt: 0xf7c948, shorts: 0xd8262f },
+  ponce: { shirt: 0xd12b2b, shorts: 0x1d1d1d, top: 'polo' },
+  playa: { shirt: 0x3fb8b0, shorts: 0xf2a93b, top: 'hawaiana' },
+  pescador: { shirt: 0xb8a878, shorts: 0x2f3f5f, top: 'guayabera', legs: 'largos' },
+  bandera: { shirt: 0x2f6fcf, shorts: 0xf4f2ec, top: 'camiseta' },
+  vejigante: { shirt: 0xf7c948, shorts: 0xd8262f, top: 'camiseta', legs: 'largos' },
 };
 
 export class Player {
@@ -178,7 +114,8 @@ export class Player {
     this.m = makeModel({ ...this.char, ...(OUTFITS[this.look] || {}) });
     this.scene.remove(was);
     this.scene.add(this.m.root);
-    if (this.hat.state === 'on') this.m.hatSlot.add(hat);
+    if (this.hat.state === 'on') { this.m.hatSlot.add(hat); hat.position.set(0, 0, 0); }
+    was.traverse(o => { if (o.isMesh && o !== hat && !hat.getObjectById(o.id)) o.geometry.dispose(); });
   }
 
   // swap the pava (straw or the golden one from the shop), wherever it is right now

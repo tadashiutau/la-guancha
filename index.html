@@ -97,6 +97,26 @@
   .copt { border: 3px solid #d8cfbc; background: #fff; border-radius: 12px; padding: 6px 10px; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
   .copt.on { border-color: #2d6a4c; box-shadow: 0 0 0 2px #f7c948; }
   .copt.swatch { width: 34px; height: 34px; padding: 0; border-radius: 50%; }
+  .ctabs { display: flex; gap: 6px; margin: 4px 0 2px; flex-wrap: wrap; }
+  .ctab { flex: 1 1 0; min-width: 70px; border: 3px solid #d8cfbc; background: #f3ead7; border-radius: 12px; padding: 7px 8px; font: inherit; font-size: 15px; font-weight: 800; color: #2d6a4c; cursor: pointer; }
+  .ctab.on { background: #2d6a4c; border-color: #2d6a4c; color: #fff; }
+  #charRows { min-height: 250px; }
+  /* button prompts along the bottom edge (minigames), Nintendo style */
+  #prompts { position: fixed; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: flex-end; pointer-events: none;
+    right: calc(16px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); max-width: min(92vw, 720px);
+    padding: 7px 14px; border-radius: 22px; background: rgba(20,30,28,.55); color: #fff; font-weight: 800; font-size: 15px; }
+  /* touch: the buttons get their own labels, the stick actions sit small in the bottom-left corner */
+  #prompts.dev-touch { right: auto; left: calc(12px + var(--safe-l)); bottom: calc(10px + var(--safe-b)); justify-content: flex-start; font-size: 12px; max-width: 44vw; padding: 5px 10px; gap: 3px 10px; }
+  .btn[data-cap]::after { content: attr(data-cap); position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); font-size: 10px; line-height: 1; font-weight: 900; color: #fff; text-shadow: 0 1px 3px #000c, 0 0 2px #000c; white-space: nowrap; pointer-events: none; }
+  #prompts .pr { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .gl { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 5px; border-radius: 8px; background: #f4f1e8; color: #1d2826; font-size: 14px; font-weight: 900; line-height: 1; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .gl.face { border-radius: 50%; width: 26px; padding: 0; color: #fff; background: #3b4744; }
+  .gl.pill { border-radius: 13px; background: #3b4744; color: #fff; font-size: 12px; }
+  .gl.key { font-size: 12px; border: 1px solid #b9b2a2; }
+  .gl.tch { background: transparent; box-shadow: none; font-size: 18px; min-width: 0; padding: 0; }
+  #bTalk .gl { vertical-align: middle; margin-right: 4px; }
+  #dialog .next .gl { width: 24px; height: 24px; font-size: 13px; }
+  body.cine #prompts { visibility: hidden; }
   @media (max-width: 520px) { #charCanvas { flex-basis: 100%; width: 100%; height: 220px; } }
 
   #dlgText { min-height: 3em; line-height: 1.45; }
@@ -210,6 +230,7 @@
 </div>
 <button id="bTalk" data-btn="talk">💬 <span data-t="talk">Hablar</span></button>
 
+<div id="prompts" hidden></div>
 <div id="dialog"><div id="dlgText" role="status" aria-live="polite"></div><div id="dlgOpts" class="row"></div><div class="next" id="dlgNext">▼</div></div>
 
 <div id="title" class="screen show">
@@ -266,6 +287,7 @@
         <button role="tab" data-tab="stats"><span class="mi">🏆</span><span data-t="tabStats">Colección</span></button>
         <button role="tab" data-tab="options"><span class="mi">⚙️</span><span data-t="tabOptions">Opciones</span></button>
       </nav>
+      <button class="pill" id="bQuitRide" hidden>🏁 <span data-t="quitRide">Salir de la carrera</span></button>
       <button class="pill primary" id="bResume">▶ <span data-t="resume">Seguir jugando</span></button>
     </header>
     <div class="mbody">

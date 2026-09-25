@@ -82,6 +82,28 @@ export class Sfx {
     o.start(t); o.stop(t + dur + 0.02);
   }
 
+  // a kart engine hum: engine(0..1.4) sets the revs, engine(null) switches it off
+  engine(rev) {
+    const c = this.ctx;
+    if (!c) return;
+    if (rev == null) {
+      if (this.eng) { const e = this.eng; e.g.gain.setTargetAtTime(0, c.currentTime, 0.1); setTimeout(() => { e.o.stop(); e.o2.stop(); }, 500); this.eng = null; }
+      return;
+    }
+    if (!this.eng) {
+      const o = c.createOscillator(), o2 = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+      o.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.value = 700; g.gain.value = 0;
+      o.connect(f); o2.connect(f); f.connect(g); g.connect(this.master);
+      o.start(); o2.start();
+      this.eng = { o, o2, f, g };
+    }
+    const t = c.currentTime, e = this.eng;
+    e.o.frequency.setTargetAtTime(55 + rev * 95, t, 0.06);
+    e.o2.frequency.setTargetAtTime(27 + rev * 48, t, 0.06);
+    e.f.frequency.setTargetAtTime(500 + rev * 900, t, 0.08);
+    e.g.gain.setTargetAtTime(0.028 + rev * 0.02, t, 0.08);
+  }
+
   noise(dur, { vol = 0.2, freq = 1200, q = 1, type = 'bandpass', delay = 0, slide = 0 } = {}) {
     const c = this.ctx;
     if (!c) return;
@@ -176,6 +198,17 @@ export class Sfx {
       case 'step': this.noise(0.05, { vol: 0.05, freq: 900, type: 'lowpass' }); break;
       case 'stepwood': this.tone(170 + Math.random() * 40, 0.06, { type: 'triangle', vol: 0.07, slide: 0.7 }); this.noise(0.03, { vol: 0.04, freq: 2500 }); break;
       case 'gull': this.gull(); break;
+      // the woods: a wolf whistle, a phone buzzing in a pocket, a bush rustling
+      case 'whistle': this.tone(1400, 0.22, { type: 'sine', vol: 0.09, slide: 1.9, attack: 0.02 }); this.tone(2400, 0.45, { type: 'sine', vol: 0.09, slide: 0.45, delay: 0.3, attack: 0.02 }); break;
+      case 'buzz': for (let i = 0; i < 2; i++) this.tone(140, 0.18, { type: 'square', vol: 0.05, delay: i * 0.3 }); break;
+      // karts
+      case 'boost': this.noise(0.5, { vol: 0.16, freq: 600, slide: 4 }); this.tone(220, 0.4, { type: 'sawtooth', vol: 0.04, slide: 2.5 }); break;
+      case 'itembox': [988, 1319, 1568, 1976].forEach((f, i) => this.tone(f, 0.12, { type: 'triangle', vol: 0.08, delay: i * 0.04 })); break;
+      case 'spin': this.tone(700, 0.6, { type: 'square', vol: 0.05, slide: 0.3 }); this.noise(0.3, { vol: 0.12, freq: 1500 }); break;
+      case 'throw': this.noise(0.25, { vol: 0.1, freq: 2500, slide: 0.4 }); break;
+      case 'beep': this.tone(660, 0.25, { type: 'square', vol: 0.07 }); break;
+      case 'go': this.tone(1320, 0.5, { type: 'square', vol: 0.08 }); break;
+      case 'rustle': for (let i = 0; i < 3; i++) this.noise(0.12, { vol: 0.07, freq: 2600, delay: i * 0.1 }); break;
     }
   }
 

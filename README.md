@@ -2,7 +2,7 @@
 
 A small Super Mario Odyssey–style 3D exploration game set on the **Paseo Tablado La Guancha** in Ponce, Puerto Rico. It's built from real map data and runs in the browser on iPhone, Android tablets and desktop. The in-game text is Spanish first, with an English toggle.
 
-Collect **30 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around. Marina on the boardwalk lends you a jet ski to race her through eight rings out on the water, with free rematches.
+Collect **31 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around. The little woods behind the beach are a known cruising spot, and the game plays along: besides the Bird Club, a few very casual men (some shirtless) drift in from the road, vanish behind a rustling bush for a while, come back out tugging at their shorts, or just "hang out" among the trees with a buzzing phone, keys lost since three o'clock or an upside-down newspaper. Talk to them and they check both ways first. Marina on the boardwalk lends you a jet ski to race her through eight rings out on the water, with free rematches. Cheo runs the Gran Premio de La Guancha: a Mario Kart–style three-lap race up the Paseo (its bollards sink into the street), around the lion fountain and the south roundabout, with drifting, turbo pads, ramps and item boxes (cafecito, coconuts, pavas and the homing chancla). The minigames show their button prompts along the bottom of the screen for whatever you're playing with: touch, keyboard, or an Xbox, PlayStation or Nintendo controller.
 
 ## Play it
 
@@ -42,11 +42,13 @@ This creates `dist/` and `la-guancha.zip` (about 6 MB). You can upload either on
 | Crouch / ground pound | ⤓ | Shift / K | triggers |
 | Talk | 💬 button | F | B |
 | Map / pause | II button | M / Esc | Select / Start |
-| Jet ski: speed up and steer / get off | stick / ⤒ | WASD / Space | left stick / A |
+| Jet ski and kart: gas / brake / steer | stick | W / S / A D | A / B / left stick |
+| Kart: drift / use item | ⤒ / 🎩 | Space / E | RB or RT / X or Y |
+| Jet ski and kart: quit | hold ⤓ | hold Shift | hold LB or LT, or the pause menu |
 
 A Bluetooth controller paired to the phone or tablet works in Safari and Chrome; menus are navigated with the stick, A and B.
 
-Choose one of three save slots before playing. A new game starts in the character creator: name, skin, hair color and style, mustache or beard, and clothes colors, with a turning 3D preview (Options → Edit character changes it later). A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically.
+Choose one of three save slots before playing. A new game starts in the character creator, in four tabs with a turning 3D preview that moves in close for the face and hair: **Cara** (skin, eye color, facial hair from mustache to goatee, circle beard or stubble, glasses or sunglasses), **Pelo** (13 hairstyles, 11 hair colors), **Cuerpo** (build, height, a chain, earring or watch) and **Ropa** (guayabera, T-shirt, polo, Hawaiian, tank top or shirtless, shorts or long pants, sneakers, flip-flops or shoes, and their colors). Options → Edit character changes it later. The player and every NPC share one figure builder (js/figure.js) with smooth shading and proper faces. A save from an older, incompatible version shows a warning on its slot with a Delete button, so you can start over there. Progress is saved in the browser automatically.
 
 The game is meant to be relaxed: timers never fail a challenge, the pava homes in on targets in front of you, and coins and shells are easy to grab. The pause button (or Esc) opens the game menu: **Mapa** (flags to travel to and every quest marked, tap one to follow it), **Misiones** (the quest log: in progress, available and completed, with a Seguir button), **Colección** (masks, shells, chavos, flags, crates, quests done and play time) and **Opciones** (sound, music, language, save slots). Tapping the ⭐ quest label on screen opens the quest log; T cycles quests. The save screen can copy, move, or delete slots; a previous single-slot save moves to the first available slot automatically.
 

@@ -304,4 +304,5 @@ export function buildAvesQuest(g, { top, H, onLane, dist2, center }) {
     progress: () => (stage() === 1 ? `${found().length}/4` : ''),
     status: () => (stage() >= 3 ? 'done' : stage() >= 1 ? 'active' : 'available'),
     where: () => ({ x: club.x, y: clubY, z: club.z, label: line('Habla con Wilfredo', 'Talk to Wilfredo') }) });
+  return { club, bushes, pts };
 }

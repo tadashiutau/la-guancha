@@ -168,7 +168,8 @@ ui.onToSlots = () => {
   location.reload();
 };
 ui.onPause = on => { state = on ? 'pause' : 'play'; input.release(); };
-ui.onWarp = (x, y, z, face) => { if (game.jetski?.riding) game.jetski.leave('quit'); player.teleport(x, y, z, face); cam.snap(player); };
+ui.onQuitRide = () => game.vehicle?.leave('quit');
+ui.onWarp = (x, y, z, face) => { if (game.vehicle) game.vehicle.leave('quit'); player.teleport(x, y, z, face); cam.snap(player); };
 ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); game?.onLang(); };
 
 // ------------------------------------------------------------------ loop
@@ -197,6 +198,7 @@ function frame() {
   let dt = Math.min(clock.getDelta(), 1 / 20);
   const now = performance.now() / 1000;
   const inp = input.frame();
+  ui.setDevice(inp.device, inp.padKind); // button prompts follow the device you're using
   if (game.cinematic) {
     // a cutscene drives the camera; jump or talk skips it
     if (inp.jumpPressed || inp.talkPressed) game.cinematic.skip();
@@ -216,10 +218,10 @@ function frame() {
     game.preUpdate(dt, inp);
     const pinp = { ...inp }; // one-shot presses go to the first physics substep only
     for (let i = 0; i < steps; i++) {
-      if (game.jetski?.riding) game.jetski.drive(h, game.blockInput ? { mx: 0, my: 0 } : pinp);
+      if (game.vehicle) game.vehicle.drive(h, game.blockInput ? { mx: 0, my: 0 } : pinp);
       else player.update(h, game.blockInput ? { mx: 0, my: 0 } : pinp, cam.yaw);
       game.onPlayerEvents(player.events);
-      if (i === 0) { pinp.jumpPressed = pinp.hatPressed = pinp.crouchPressed = false; }
+      if (i === 0) { pinp.jumpPressed = pinp.hatPressed = pinp.crouchPressed = false; if (pinp.pad) pinp.pad = { ...pinp.pad, rHit: false, itemHit: false }; }
     }
     game.update(dt, inp, now);
     cam.update(dt, player, inp, input.lastCamInput, now);

@@ -109,7 +109,7 @@ export function buildJetskiQuest(g, along, fromNorth, deckY) {
         Q('¿Otra vuelta para bajar ese tiempo?', 'Another lap to beat that time?'),
       ] : [
         Q(`¡Oye, ${g.playerName}! Soy Marina. ¿Te atreves a correr conmigo en motora acuática?`, `Hey, ${g.playerName}! I'm Marina. Dare to race me on a jet ski?`),
-        Q('Pasa por los ocho aros en orden; el verde es el próximo. La palanca acelera y gira, y ⤒ te baja si te quieres rendir.', 'Go through all eight rings in order; the green one is next. The stick speeds up and steers, and ⤒ gets you off if you give up.'),
+        Q('Pasa por los ocho aros en orden; el verde es el próximo. Los botones salen abajo en la pantalla.', 'Go through all eight rings in order; the green one is next. The buttons are shown at the bottom of the screen.'),
         Q('Si llegas antes que yo, te ganas una máscara. Si no, la revancha es gratis.', 'Beat me to the last ring and you win a mask. If not, rematches are free.'),
       ];
       const choice = await g.ui.say('Marina', lines, [
@@ -128,7 +128,7 @@ export function buildJetskiQuest(g, along, fromNorth, deckY) {
       return p && { x: p.x, y: 0, z: p.z, label: Q(`Aro ${this.next + 1}/${rings.length}`, `Ring ${this.next + 1}/${rings.length}`) };
     },
     start() {
-      this.riding = true; this.next = 0; this.speed = 0; this.elapsed = 0; this.rivalDistance = 0; this.wake = 0;
+      this.riding = true; g.vehicle = this; this.next = 0; this.speed = 0; this.elapsed = 0; this.rivalDistance = 0; this.wake = 0;
       const p = g.player;
       p.events.length = 0;
       if (p.hat.state !== 'on') { // a thrown pava comes straight back
@@ -141,10 +141,12 @@ export function buildJetskiQuest(g, along, fromNorth, deckY) {
       rings.forEach((r, i) => { r.visible = true; tint(r, i === 0 ? 0x44e6b6 : 0x58c5fa); });
       g.cam.snap(p);
       g.ui.banner(tr(Q('¡Salida!', 'Go!')), tr(Q('Sigue el aro verde', 'Follow the green ring')), 1.7);
+      g.ui.prompts([{ act: 'gas', label: Q('Acelerar', 'Gas') }, { act: 'brake', label: Q('Frenar', 'Brake') }, { act: 'steer', label: Q('Girar', 'Steer') }, { act: 'quit', label: Q('Bajarte (mantén)', 'Get off (hold)') }]);
       g.sfx.play('ring');
     },
     leave(result) {
-      this.riding = false; this.speed = 0;
+      this.riding = false; g.vehicle = null; this.speed = 0;
+      g.ui.prompts(null);
       rings.forEach(r => (r.visible = false));
       ski.position.set(start.x, 0.1, start.z); ski.rotation.set(0, face, 0);
       rival.position.copy(rivalPath[0]); rival.rotation.set(0, face, 0);
@@ -168,9 +170,11 @@ export function buildJetskiQuest(g, along, fromNorth, deckY) {
     // called by main.js instead of player.update while riding
     drive(dt, inp) {
       if (!this.riding) return;
-      if (inp.jumpPressed) { this.leave('quit'); return; }
+      // controller: A gas, B brake, hold LB/LT to get off; touch/keys: stick or W/S, hold ⤓ or Shift
+      const pad = inp.pad;
+      if (pad ? pad.l : inp.crouch) { this.offT = (this.offT || 0) + dt; if (this.offT > 0.8) { this.offT = 0; this.leave('quit'); return; } } else this.offT = 0;
       const p = g.player;
-      const throttle = Math.max(-0.4, Math.min(1, inp.my || 0));
+      const throttle = Math.max(-0.4, Math.min(1, Math.max(inp.my || 0, pad?.a ? 1 : 0) - (pad?.b ? 0.4 : 0)));
       const target = throttle > 0 ? throttle * TOP : throttle * 6;
       this.speed += (target - this.speed) * Math.min(1, dt * (throttle ? 1.9 : 1.4));
       // the camera sits behind, so stick right turns right (heading angle goes down)

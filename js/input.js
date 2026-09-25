@@ -13,6 +13,7 @@ export class Input {
     this.enabled = true;
 
     if (matchMedia('(pointer: coarse)').matches) { this.touchMode = true; document.body.classList.add('touch'); }
+    this.device = this.touchMode ? 'touch' : 'keys'; // last used: 'pad', 'touch' or 'keys' (button prompts)
     this.stick = root.querySelector('#stick');
     this.knob = root.querySelector('#knob');
     this.stickId = null; this.stickO = [0, 0];
@@ -29,7 +30,7 @@ export class Input {
       const name = b.dataset.btn;
       const on = e => {
         e.preventDefault(); e.stopPropagation();
-        this.touchMode = true;
+        this.touchMode = true; this.usedTouch();
         if (name in this.held) this.held[name] = true;
         this.pressed[name] = true;
         b.classList.add('on');
@@ -46,6 +47,7 @@ export class Input {
     window.addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT') return;
       this.keys.add(e.code);
+      this.device = 'keys';
       const a = map[e.code];
       if (a) {
         e.preventDefault();
@@ -63,6 +65,12 @@ export class Input {
     window.addEventListener('wheel', e => { this.zoom += Math.sign(e.deltaY); }, { passive: true });
   }
 
+  // touching the screen after using a controller brings the touch controls back
+  usedTouch() {
+    this.device = 'touch';
+    if (this.padActive) { this.padActive = false; document.body.classList.remove('pad'); }
+  }
+
   down(e) {
     if (!this.enabled) return;
     const w = window.innerWidth;
@@ -72,6 +80,7 @@ export class Input {
     }
     this.touchMode = true;
     document.body.classList.add('touch');
+    this.usedTouch();
     if (e.clientX < w * 0.45 && this.stickId === null) {
       this.stickId = e.pointerId;
       this.stickO = [e.clientX, e.clientY];
@@ -131,7 +140,15 @@ export class Input {
     const rx = dz(gp.axes[2] || 0), ry = dz(gp.axes[3] || 0);
     if (gp.buttons.some((b, i) => btn(i)) || l > 0 || rx || ry) {
       if (!this.padActive) { this.padActive = true; document.body.classList.add('pad'); }
+      this.device = 'pad';
     }
+    // which face-button labels to show: Xbox A/B/X/Y, PlayStation ✕○□△ or Nintendo (bottom = B)
+    const id = (gp.id || '').toLowerCase();
+    this.padKind = /xbox|xinput|045e/.test(id) ? 'xbox'
+      : /054c|playstation|dualsense|dualshock|wireless controller/.test(id) ? 'ps'
+        : /057e|nintendo|pro controller|joy-con/.test(id) ? 'nintendo' : 'xbox';
+    // raw buttons for the kart and jet ski: A gas, B brake, RB/RT drift, X/Y item, LB/LT quit
+    this.padBtns = { a: btn(0), b: btn(1), r: btn(5) || btn(7), l: btn(4) || btn(6), rHit: hit(5) || hit(7), itemHit: hit(2) || hit(3) };
     // menus first: if something is open, the pad drives it instead of the game
     if (this.padNav(gp, { lx, ly, hit })) { this.pad = { mx: 0, my: 0 }; return; }
     if (hit(0)) this.pressed.jump = true;
@@ -232,10 +249,11 @@ export class Input {
       jumpPressed: this.pressed.jump, hatPressed: this.pressed.hat, crouchPressed: this.pressed.crouch,
       talkPressed: this.pressed.talk, pausePressed: this.pressed.pause, mapPressed: this.pressed.map,
       camDX: this.camDX, camDY: this.camDY, zoom: this.zoom,
+      device: this.device, padKind: this.padKind || 'xbox', pad: this.device === 'pad' ? this.padBtns || null : null,
     };
     for (const a in this.pressed) this.pressed[a] = false;
     this.camDX = this.camDY = 0; this.zoom = 0;
-    if (!this.enabled) { out.mx = out.my = 0; out.jumpPressed = out.hatPressed = out.crouchPressed = false; }
+    if (!this.enabled) { out.mx = out.my = 0; out.jumpPressed = out.hatPressed = out.crouchPressed = false; out.pad = null; }
     return out;
   }
 
