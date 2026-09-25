@@ -136,6 +136,7 @@ function frame() {
   world.water.uniforms.uTime.value = now;
   // underwater look
   const under = camera.position.y < 0 && data.terrainH(camera.position.x, camera.position.z) < camera.position.y;
+  sfx.underwater(under);
   scene.fog.color.copy(under ? UNDER : FOG);
   scene.fog.near = under ? 1 : 120;
   scene.fog.far = under ? 45 : 1400;

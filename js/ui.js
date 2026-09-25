@@ -23,6 +23,7 @@ export class UI {
       try { localStorage.setItem('guancha.muted', this.sfx.muted ? '1' : '0'); } catch (e) { /* ignore */ }
       this.applyLang();
     };
+    $('bMusic').onclick = () => { this.sfx.setMusic(!this.sfx.musicOn); this.applyLang(); };
     $('dialog').addEventListener('pointerdown', e => { if (e.target.tagName !== 'BUTTON') { e.stopPropagation(); this.advance(); } });
     $('bigmap').addEventListener('pointerdown', e => this.mapClick(e));
     this.mini = $('mini').getContext('2d');
@@ -44,6 +45,7 @@ export class UI {
     $('ctrlText').textContent = ctrl;
     $('ctrlText2').textContent = ctrl;
     $('bSound').textContent = `${t('sound')}: ${this.sfx.muted ? t('off') : t('on')}`;
+    $('bMusic').textContent = `${t('music')}: ${this.sfx.musicOn ? t('on') : t('off')}`;
     document.title = t('title');
   }
 

@@ -8,6 +8,7 @@ import { defineLevel } from './level.js';
 const SAVE_KEY = 'guancha.save.v1';
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+const posKey = o => `${Math.round(o.x)}:${Math.round(o.y)}:${Math.round(o.z)}`;
 
 class Particles {
   constructor(scene, n = 500) {
@@ -148,7 +149,7 @@ export class Game {
     const mesh = M.flagMesh();
     mesh.position.set(x, y, z);
     this.root.add(mesh);
-    const f = { id, x, y, z, face, on: false, mesh };
+    const f = { id, x, y, z, face, on: false, mesh, rise: 0 };
     this.flags.push(f);
     return f;
   }
@@ -191,15 +192,19 @@ export class Game {
   // ------------------------------------------------------------ save / load
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
 
+  // Saves identify things by id or by rounded position (not list order), so saves keep working
+  // when an update adds or moves coins, shells, crates or spots.
   save() {
     if (this.loading) return;
-    const bits = a => a.map(o => (o.alive ? '0' : '1')).join('');
+    const keys = a => a.filter(o => !o.alive || o.broken || o.used).map(posKey);
     const s = {
-      v: 1, wallet: this.wallet, cg: bits(this.coins), sh: bits(this.conchas),
+      v: 2, wallet: this.wallet,
+      coins: keys(this.coins.filter(c => !c.alive)),
+      conchas: keys(this.conchas.filter(c => !c.alive)),
       masks: this.masks.filter(m => m.got).map(m => m.id),
       flags: this.flags.filter(f => f.on).map(f => f.id),
-      crates: this.crates.filter(c => c.broken).map(c => c.idx),
-      spots: this.spots.filter(c => c.used).map(c => c.idx),
+      crates: keys(this.crates.filter(c => c.broken)),
+      spots: keys(this.spots.filter(c => c.used)),
       q: this.q, rv: this.revealed, shop: this.shop, look: this.player.look, time: Math.round(this.playTime),
       last: this.lastFlag,
     };
@@ -212,8 +217,19 @@ export class Game {
     if (!s) { this.refreshAll(); return; }
     this.loading = true;
     this.wallet = s.wallet || 0;
-    (s.cg || '').split('').forEach((b, i) => { if (b === '1' && this.coins[i]) this.coins[i].alive = false; });
-    (s.sh || '').split('').forEach((b, i) => { if (b === '1' && this.conchas[i]) this.conchas[i].alive = false; });
+    const mark = (list, saved, fn) => { const set = new Set(saved || []); for (const o of list) if (set.has(posKey(o))) fn(o); };
+    if (s.v === 1) {
+      // first version stored list positions
+      (s.cg || '').split('').forEach((b, i) => { if (b === '1' && this.coins[i]) this.coins[i].alive = false; });
+      (s.sh || '').split('').forEach((b, i) => { if (b === '1' && this.conchas[i]) this.conchas[i].alive = false; });
+      for (const i of s.crates || []) if (this.crates[i]) this.breakCrate(this.crates[i], true);
+      for (const i of s.spots || []) if (this.spots[i]) this.spots[i].used = true;
+    } else {
+      mark(this.coins, s.coins, c => (c.alive = false));
+      mark(this.conchas, s.conchas, c => (c.alive = false));
+      mark(this.crates, s.crates, c => this.breakCrate(c, true));
+      mark(this.spots, s.spots, c => (c.used = true));
+    }
     this.q = s.q || {};
     this.shop = s.shop || {};
     this.playTime = s.time || 0;
@@ -221,12 +237,11 @@ export class Game {
     for (const [id, p] of Object.entries(s.rv || {})) this.reveal(id, ...p, false);
     for (const id of s.masks || []) { const m = this.maskById(id); if (m) { m.got = true; m.group.visible = false; } }
     for (const id of s.flags || []) { const f = this.flags.find(f => f.id === id); if (f) this.lightFlag(f, true); }
-    for (const i of s.crates || []) if (this.crates[i]) this.breakCrate(this.crates[i], true);
-    for (const i of s.spots || []) if (this.spots[i]) this.spots[i].used = true;
     if (s.look && s.look !== 'default') this.player.setLook(s.look);
     for (const c of this.challenges) c.onLoad?.();
     this.loading = false;
     this.refreshAll();
+    this.save(); // upgrade old saves to the current format
   }
 
   reset() {
@@ -249,8 +264,12 @@ export class Game {
 
   spawn() {
     const f = this.flags.find(f => f.id === this.lastFlag && f.on) || this.flags[0];
-    this.player.teleport(f.x + Math.sin(f.face) * 1.5, f.y + 0.3, f.z + Math.cos(f.face) * 1.5, f.face);
-    this.lightFlag(f, true);
+    if (f.on) {
+      this.player.teleport(f.x + Math.sin(f.face) * 2, f.y + 0.3, f.z + Math.cos(f.face) * 2, f.face);
+    } else {
+      // first visit: stand a few steps away looking at the flag, so touching it is the first thing you do
+      this.player.teleport(f.x + Math.sin(f.face) * 3.2, f.y + 0.3, f.z + Math.cos(f.face) * 3.2, f.face + Math.PI);
+    }
   }
 
   startPlaying() {
@@ -268,7 +287,7 @@ export class Game {
   onPlayerEvents(ev) {
     const P = this.player.pos;
     for (const e of ev) {
-      const snd = { jump: 'jump', bigjump: 'bigjump', longjump: 'longjump', walljump: 'walljump', land: 'land', poundstart: 'poundstart', pound: 'pound', dive: 'dive', hat: 'hat', hatjump: 'hatjump', bounce: 'bounce', splash: 'splash', stroke: 'stroke', mantle: 'mantle' }[e];
+      const snd = { step: 'step', stepwood: 'stepwood', jump: 'jump', bigjump: 'bigjump', longjump: 'longjump', walljump: 'walljump', land: 'land', poundstart: 'poundstart', pound: 'pound', dive: 'dive', hat: 'hat', hatjump: 'hatjump', bounce: 'bounce', splash: 'splash', stroke: 'stroke', mantle: 'mantle' }[e];
       if (snd) this.sfx.play(snd);
       if (e === 'pound') {
         this.shock(P.x, P.y + 0.05, P.z);
@@ -358,10 +377,12 @@ export class Game {
     if (f.on) return;
     f.on = true;
     f.mesh.userData.cloth.material = f.mesh.userData.colored;
+    if (silent) f.rise = 1;
     if (!silent) {
       this.sfx.play('checkpoint');
       this.ui.toast(t('checkpoint'));
-      this.fx.emit(f.x, f.y + 3, f.z, 25, { color: 0xffffff, speed: 3, up: 3, life: 0.8 });
+      this.fx.emit(f.x, f.y + 3.2, f.z, 30, { color: 0xffffff, speed: 3, up: 3, life: 0.9 });
+      this.fx.emit(f.x, f.y + 3.2, f.z, 20, { color: 0xe3342f, speed: 3, up: 3, life: 0.9 });
       this.lastFlag = f.id;
       this.save();
     }
@@ -548,6 +569,9 @@ export class Game {
     }
     for (const f of this.flags) {
       const cl = f.mesh.userData.cloth;
+      // raised flags slide up the pole
+      if (f.on && f.rise < 1) f.rise = Math.min(1, f.rise + dt * 1.6);
+      cl.position.y = 0.5 + (1 - Math.pow(1 - f.rise, 3)) * 2.3;
       const p = cl.geometry.attributes.position;
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i) + 0.6;

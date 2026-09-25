@@ -1,21 +1,65 @@
-// All sounds are synthesized with WebAudio: no asset files needed.
+// All sounds are synthesized with WebAudio: no asset files needed (music can also come from music/tema.mp3).
+import { Music } from './music.js';
+
+// iOS mutes Web Audio when the ring/silent switch is on silent. Playing a (silent) HTML audio
+// element and asking for the "playback" audio session makes the game audible like a video would be.
+function unlockIOS() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
+  try {
+    const sr = 8000, n = sr / 2, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const w = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr, true);
+    v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    const a = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+    a.loop = true; a.setAttribute('playsinline', '');
+    a.play().catch(() => {});
+  } catch (e) { /* ignore */ }
+}
+
 export class Sfx {
-  constructor() { this.ctx = null; this.muted = false; this.coinStreak = 0; this.lastCoin = 0; }
+  constructor() {
+    this.ctx = null; this.muted = false; this.coinStreak = 0; this.lastCoin = 0;
+    try { this.musicOn = localStorage.getItem('guancha.music') !== '0'; } catch (e) { this.musicOn = true; }
+  }
 
   start() {
     if (this.ctx) { this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
+    unlockIOS();
     this.ctx = new AC();
     this.master = this.ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.55;
+    this.master.gain.value = this.muted ? 0 : 0.6;
     this.master.connect(this.ctx.destination);
     this.startAmbience();
+    this.music = new Music(this.ctx, this.master);
+    this.music.setOn(this.musicOn);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.ctx.suspend(); else this.ctx.resume();
+    });
+    // some browsers start suspended until another gesture
+    const kick = () => this.ctx.state !== 'running' && this.ctx.resume();
+    window.addEventListener('pointerdown', kick);
+    window.addEventListener('keydown', kick);
   }
 
   setMuted(m) {
     this.muted = m;
-    if (this.master) this.master.gain.value = m ? 0 : 0.55;
+    if (this.master) this.master.gain.value = m ? 0 : 0.6;
+  }
+
+  setMusic(on) {
+    this.musicOn = on;
+    try { localStorage.setItem('guancha.music', on ? '1' : '0'); } catch (e) { /* ignore */ }
+    this.music?.setOn(on);
+  }
+
+  underwater(on) {
+    if (this.isUnder === on) return;
+    this.isUnder = on;
+    this.music?.underwater(on);
   }
 
   tone(freq, dur, { type = 'square', vol = 0.15, slide = 0, delay = 0, attack = 0.005 } = {}) {
@@ -84,11 +128,14 @@ export class Sfx {
       case 'fail': [392, 330, 262].forEach((f, i) => this.tone(f, 0.25, { type: 'square', vol: 0.06, delay: i * 0.15 })); break;
       case 'checkpoint': [392, 523, 659, 784].forEach((f, i) => this.tone(f, 0.18, { type: 'square', vol: 0.06, delay: i * 0.08 })); break;
       case 'buy': [880, 1320].forEach((f, i) => this.tone(f, 0.15, { type: 'square', vol: 0.06, delay: i * 0.08 })); break;
-      case 'mask': this.fanfare(); break;
+      case 'mask': this.music?.duck(3.5); this.fanfare(); break;
       case 'pelican': this.noise(0.25, { vol: 0.12, freq: 900, q: 6 }); this.tone(300, 0.2, { type: 'sawtooth', vol: 0.03, slide: 0.7 }); break;
       case 'meow': this.tone(700, 0.35, { type: 'triangle', vol: 0.08, slide: 1.4 }); this.tone(900, 0.3, { type: 'triangle', vol: 0.06, slide: 0.6, delay: 0.25 }); break;
       case 'tick': this.tone(1500, 0.04, { type: 'square', vol: 0.04 }); break;
       case 'coqui': this.coqui(); break;
+      case 'step': this.noise(0.05, { vol: 0.05, freq: 900, type: 'lowpass' }); break;
+      case 'stepwood': this.tone(170 + Math.random() * 40, 0.06, { type: 'triangle', vol: 0.07, slide: 0.7 }); this.noise(0.03, { vol: 0.04, freq: 2500 }); break;
+      case 'gull': this.gull(); break;
     }
   }
 
@@ -97,6 +144,14 @@ export class Sfx {
     const seq = [[523, 0], [659, 0.11], [784, 0.22], [1047, 0.33], [988, 0.55], [1047, 0.66], [1319, 0.8]];
     for (const [f, d] of seq) { this.tone(f, 0.28, { type: 'square', vol: 0.07, delay: d }); this.tone(f / 2, 0.28, { type: 'triangle', vol: 0.08, delay: d }); }
     for (let i = 0; i < 8; i++) this.noise(0.05, { vol: 0.08, freq: 6000, delay: i * 0.11, type: 'highpass' }); // güiro-ish
+  }
+
+  gull() {
+    for (let i = 0; i < 2 + Math.floor(Math.random() * 2); i++) {
+      const d = i * 0.28, f = 1300 + Math.random() * 300;
+      this.tone(f, 0.22, { type: 'sawtooth', vol: 0.018, slide: 0.72, delay: d, attack: 0.03 });
+      this.tone(f * 1.5, 0.2, { type: 'sine', vol: 0.02, slide: 0.7, delay: d, attack: 0.03 });
+    }
   }
 
   coqui() {
@@ -121,5 +176,6 @@ export class Sfx {
     s.start(); lfo.start();
     this.surf = g;
     setInterval(() => { if (Math.random() < 0.35) this.coqui(); }, 7000);
+    setInterval(() => { if (Math.random() < 0.4) this.gull(); }, 9000);
   }
 }

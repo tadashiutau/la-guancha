@@ -480,7 +480,12 @@ export class Player {
     m.root.rotation.y = this.face;
     const sp = this.speed;
     const k = Math.min(1, sp / RUN);
+    const lastStep = Math.floor(this.phase / Math.PI);
     this.phase += dt * (4 + sp * 1.5);
+    if (st === 'ground' && sp > 1.5 && Math.floor(this.phase / Math.PI) !== lastStep) {
+      const tag = this.groundCol?.tag;
+      this.events.push(tag === 'deck' || tag === 'step' || tag === 'pier' || tag === 'roof' || tag === 'towertop' ? 'stepwood' : 'step');
+    }
     const s = Math.sin(this.phase);
     let bodyX = 0, bodyZ = 0, bodyY = 0.52;
     let armX = [0, 0], armZ = [0.1, -0.1], legX = [0, 0];
