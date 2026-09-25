@@ -47,7 +47,9 @@ export class Batch {
   }
 
   bucket(x, z) {
-    const k = Math.floor(x / this.chunk) + ',' + Math.floor(z / this.chunk);
+    // a huge chunk size means "one mesh" (single models like a coin or a person's head); without
+    // this, pieces left of or behind the origin landed in a second chunk that callers never saw
+    const k = this.chunk >= 1e6 ? 'all' : Math.floor(x / this.chunk) + ',' + Math.floor(z / this.chunk);
     let b = this.chunks.get(k);
     if (!b) this.chunks.set(k, b = { pos: [], nor: [], col: [] });
     return b;

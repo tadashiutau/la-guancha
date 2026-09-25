@@ -14,19 +14,18 @@ function single(fn) {
   return g.children[0].geometry;
 }
 
-// ---- coin: gold disk standing up
+// ---- coin: a plain gold chavo standing up (a raised rim and a slot, no pattern)
 export function coinGeometry() {
-  const generated = islandGeometry('coin', 3.5, true);
-  if (generated) return generated;
   return single(b => {
-    b.add(P.cyl(14), 0xf7c948, 0, 0, 0, 0.7, 0.1, 0.7, 0, Math.PI / 2);
-    b.add(P.box(), 0xc7921b, 0, 0, 0, 0.14, 0.4, 0.13);
+    b.add(P.cyl(16), 0xe8b530, 0, 0, 0, 0.74, 0.1, 0.74, 0, Math.PI / 2);
+    b.add(P.cyl(16), 0xf7d35a, 0, 0, 0, 0.58, 0.13, 0.58, 0, Math.PI / 2);
+    b.add(P.box(), 0xc7921b, 0, 0, 0, 0.12, 0.34, 0.15);
   });
 }
 
 // ---- concha: pink conch shell
 export function conchaGeometry() {
-  const generated = islandGeometry('conch', 2.4, true);
+  const generated = islandGeometry('conch', 2.0, true);
   if (generated) return generated;
   return single(b => {
     b.add(P.cone(7), 0xf7a8c4, 0, 0.1, 0, 0.5, 0.75, 0.5, 0, 0, Math.PI * 0.6);
@@ -38,21 +37,18 @@ export function conchaGeometry() {
 
 // ---- vejigante mask (Ponce style: red face, many horns, polka dots)
 const HORN_COLS = [0xf7c948, 0x2e9e5b, 0x2f6fd0, 0xf7c948, 0x2e9e5b, 0x2f6fd0, 0xf7c948];
+const RAINBOW = [0xe3342f, 0xff8a3d, 0xf7c948, 0x2e9e5b, 0x2f6fd0, 0x8a5ac8, 0xff6fae];
+// variant: a number picks one of four classic color schemes; 'rainbow' is the Bird Club's mask
 export function maskMesh(variant = 0) {
-  const generated = variant % 4 === 0 && islandGeometry('mask', 2.65, true);
-  if (generated) {
-    const mesh = new THREE.Mesh(generated, lam(0xffffff, { vertexColors: true, emissive: 0x18130d }));
-    mesh.castShadow = true;
-    return mesh;
-  }
-  const base = [0xe3342f, 0x2f6fd0, 0xf7c948, 0x2e9e5b][variant % 4];
-  const dot = [0xf7c948, 0xffffff, 0xe3342f, 0xf7c948][variant % 4];
+  const rainbow = variant === 'rainbow';
+  const base = rainbow ? 0xff6fae : [0xe3342f, 0x2f6fd0, 0xf7c948, 0x2e9e5b][variant % 4];
+  const dotAt = i => (rainbow ? RAINBOW[i % RAINBOW.length] : [0xf7c948, 0xffffff, 0xe3342f, 0xf7c948][variant % 4]);
   const g = single(b => {
     b.add(P.sphere(14, 10), base, 0, 0, 0, 1.0, 1.05, 0.55);
     for (let i = 0; i < 7; i++) {
       const a = -0.95 + i * (1.9 / 6);
       const x = Math.sin(a) * 0.45, y = Math.cos(a) * 0.45;
-      b.add(P.cone(6), HORN_COLS[i], x * 1.25, y * 1.25 + 0.05, -0.02, 0.2, 0.55 + (i % 2) * 0.15, 0.2, 0, 0, -a);
+      b.add(P.cone(6), rainbow ? RAINBOW[i] : HORN_COLS[i], x * 1.25, y * 1.25 + 0.05, -0.02, 0.2, 0.55 + (i % 2) * 0.15, 0.2, 0, 0, -a);
     }
     for (const s of [-1, 1]) {
       b.add(P.sphere(8, 6), 0x111111, 0.2 * s, 0.1, 0.24, 0.2, 0.15, 0.1);
@@ -63,7 +59,7 @@ export function maskMesh(variant = 0) {
     b.add(P.cone(6), base, 0, -0.03, 0.28, 0.13, 0.2, 0.13, 0, -Math.PI / 2 + 0.3);
     for (let i = 0; i < 10; i++) {
       const a = i / 10 * Math.PI * 2;
-      b.add(P.sphere(6, 4), dot, Math.cos(a) * 0.38, Math.sin(a) * 0.38, 0.17, 0.08, 0.08, 0.04);
+      b.add(P.sphere(6, 4), dotAt(i), Math.cos(a) * 0.38, Math.sin(a) * 0.38, 0.17, 0.08, 0.08, 0.04);
     }
   });
   const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x331100 }));
@@ -132,7 +128,7 @@ export function personMesh(kind, scale = 1) {
   body.add(headPivot);
   const head = bake(b => {
     b.add(P.sphere(12, 8), look.skin, 0, 0.18, 0, 0.46, 0.46, 0.46);
-    b.add(P.sphere(10, 6), look.hair, 0, 0.23, -0.02, 0.48, 0.34, 0.48);
+    b.add(P.sphere(10, 6), look.hair, 0, 0.26, -0.06, 0.48, 0.34, 0.46); // sits back so it frames the face
     for (const s of [-1, 1]) {
       b.add(P.sphere(6, 4), 0xffffff, 0.085 * s, 0.21, 0.19, 0.09, 0.09, 0.06);
       b.add(P.sphere(6, 4), 0x1d1d1d, 0.085 * s, 0.21, 0.215, 0.05, 0.05, 0.04);
@@ -209,6 +205,16 @@ export function fishGeometry() {
     b.add(P.sphere(8, 6), 0xc8d4dc, 0, 0, 0, 0.35, 0.3, 1.2);
     b.add(P.cone(4), 0x9aa8b4, 0, 0, -0.7, 0.35, 0.4, 0.08, 0, -Math.PI / 2);
     b.add(P.box(), 0x8a98a4, 0, 0.18, 0.1, 0.03, 0.2, 0.3);
+  });
+}
+
+// ---- small reef fish (pale, so each school's instance color tints it)
+export function reefFishGeometry() {
+  return single(b => {
+    b.add(P.sphere(6, 5), 0xffffff, 0, 0, 0, 0.14, 0.26, 0.42);
+    b.add(P.cone(4), 0xd8d8d8, 0, 0, -0.26, 0.2, 0.18, 0.05, 0, -Math.PI / 2);
+    b.add(P.box(), 0xcfcfcf, 0, 0.12, 0.02, 0.02, 0.1, 0.16);
+    for (const s of [-1, 1]) b.add(P.sphere(4, 3), 0x111111, s * 0.06, 0.04, 0.13, 0.04, 0.04, 0.04);
   });
 }
 

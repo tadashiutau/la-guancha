@@ -6,7 +6,9 @@ import { P } from './geo.js';
 export function buildFoliage(scene, trees, palmFrond) {
   const chunks = new Map();
   for (const tree of trees) for (const piece of tree.pieces) {
-    const key = `${piece.kind}:${Math.floor(piece.x / 120)},${Math.floor(piece.z / 120)}`;
+    // blobs share one instanced mesh per shape and 120-unit chunk
+    const shape = piece.kind === 'broad' ? 'broad' : piece.kind === 'palm' ? 'palm' : 'ico';
+    const key = `${shape}:${Math.floor(piece.x / 120)},${Math.floor(piece.z / 120)}`;
     if (!chunks.has(key)) chunks.set(key, []);
     chunks.get(key).push({ tree, piece });
   }
@@ -22,6 +24,8 @@ export function buildFoliage(scene, trees, palmFrond) {
   };
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
+  let shade = 7;
+  const rnd = () => ((shade = (shade * 16807) % 2147483647) / 2147483647);
   for (const [key, items] of chunks) {
     const source = key.startsWith('broad:') ? P.dodeca() : key.startsWith('palm:') ? palmFrond : P.ico(0);
     const geo = source.clone();
@@ -36,7 +40,7 @@ export function buildFoliage(scene, trees, palmFrond) {
       dummy.scale.set(piece.sx, piece.sy, piece.sz);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, color.setHex(piece.color));
+      mesh.setColorAt(i, color.setHex(piece.color).multiplyScalar(0.9 + rnd() * 0.2));
       tree.refs.push({ opacity, i });
     });
     mesh.instanceMatrix.needsUpdate = true;

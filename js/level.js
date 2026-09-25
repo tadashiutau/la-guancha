@@ -8,6 +8,7 @@ import { Batch, P, rng } from './geo.js';
 import { buildProps } from './props.js';
 import { buildCrowd, FOOD_LINES } from './npcs.js';
 import { buildMothQuest } from './moth-quest.js';
+import { buildAvesQuest } from './aves-quest.js';
 
 const L = (x, y) => [x * S, -y * S];
 const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -122,7 +123,63 @@ export function defineLevel(g) {
   g.mask('kiosko', { es: 'Sobre el kiosko más grande', en: 'On top of the biggest kiosk' }, bigK.x, bigK.top + 1.2, bigK.z);
 
   const fb = info.fountainBig;
-  if (fb) g.mask('fuente', { es: 'La fuente de la rotonda', en: 'The roundabout fountain' }, fb.x, fb.top + 1.3, fb.z);
+  if (fb) g.mask('fuente', { es: 'El León de la rotonda', en: 'The roundabout lion' }, fb.x, fb.top + 1.3, fb.z);
+
+  // ---------------------------------------------------------------- Policía Municipal, Precinto La Guancha
+  // (a real station on Calle B): sign on its longest street-facing wall, a patrol car and an officer
+  {
+    const [rx, ry] = [115.3, -84.7];
+    const pb = data.world.buildings.slice().sort((a, b) => dist2(a.r[0], a.r[1], rx, ry) - dist2(b.r[0], b.r[1], rx, ry))[0];
+    if (pb && dist2(pb.r[0], pb.r[1], rx, ry) < 8) {
+      const pts = pb.p.map(([x, y]) => L(x, y));
+      const ccx = pts.reduce((a, p) => a + p[0], 0) / pts.length, ccz = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+      const fb2 = info.fountainBig || { x: ccx, z: ccz - 10 };
+      let best = null;
+      pts.forEach((p, i) => {
+        const q = pts[(i + 1) % pts.length], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz);
+        let nx = dz / len, nz = -dx / len;
+        const mx = (p[0] + q[0]) / 2, mz = (p[1] + q[1]) / 2;
+        if ((mx - ccx) * nx + (mz - ccz) * nz < 0) { nx = -nx; nz = -nz; }
+        const toward = (fb2.x - mx) * nx + (fb2.z - mz) * nz > 0 ? 1 : 0;
+        const score = len * (1 + toward);
+        if (!best || score > best.score) best = { score, mx, mz, nx, nz, len };
+      });
+      const base = pb.b * S, wallH = Math.max(pb.h * S, 2.2);
+      const yawW = Math.atan2(best.nx, best.nz);
+      // sign
+      const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+      const cg = c.getContext('2d');
+      cg.fillStyle = '#1d3b7a'; cg.fillRect(0, 0, 512, 128);
+      cg.fillStyle = '#ffffff'; cg.textAlign = 'center'; cg.textBaseline = 'middle';
+      cg.font = 'bold 50px Trebuchet MS, sans-serif'; cg.fillText('POLICÍA MUNICIPAL', 256, 48);
+      cg.font = 'bold 28px Trebuchet MS, sans-serif'; cg.fillText('Precinto La Guancha · Ponce', 256, 100);
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(4.2, best.len * 0.8), Math.min(4.2, best.len * 0.8) / 4), new THREE.MeshBasicMaterial({ map: tex }));
+      sign.position.set(best.mx + best.nx * 0.08, base + wallH * 0.72, best.mz + best.nz * 0.08);
+      sign.rotation.y = yawW;
+      scene.add(sign);
+      // blue band along that wall
+      props.add(P.box(), 0x2f5fb8, best.mx + best.nx * 0.05, base + 0.45, best.mz + best.nz * 0.05, best.len, 0.5, 0.06, yawW + Math.PI / 2);
+      // patrol car parked out front
+      const px = best.mx + best.nx * 4.2, pz = best.mz + best.nz * 4.2, gy = H(px, pz), cyaw = yawW + Math.PI / 2;
+      const cc = Math.cos(cyaw), ss = Math.sin(cyaw);
+      props.add(P.box(), 0xf4f4f4, px, gy + 0.42, pz, 2.6, 0.5, 1.15, cyaw);
+      props.add(P.box(), 0x2f5fb8, px, gy + 0.47, pz, 2.62, 0.14, 1.17, cyaw);
+      props.add(P.box(), 0xf4f4f4, px - cc * 0.15, gy + 0.85, pz + ss * 0.15, 1.43, 0.42, 1.06, cyaw);
+      props.add(P.box(), 0x26323c, px - cc * 0.15, gy + 0.86, pz + ss * 0.15, 1.48, 0.3, 1.08, cyaw);
+      props.add(P.box(), 0xe3342f, px - cc * 0.15 + ss * 0.22, gy + 1.12, pz + ss * 0.15 + cc * 0.22, 0.25, 0.12, 0.3, cyaw);
+      props.add(P.box(), 0x2f6fd0, px - cc * 0.15 - ss * 0.22, gy + 1.12, pz + ss * 0.15 - cc * 0.22, 0.25, 0.12, 0.3, cyaw);
+      for (const [u, v] of [[0.8, 0.5], [0.8, -0.5], [-0.8, 0.5], [-0.8, -0.5]]) props.add(P.cyl(8), 0x1a1a1a, px + u * cc + v * ss, gy + 0.22, pz - u * ss + v * cc, 0.45, 0.2, 0.45, cyaw, Math.PI / 2);
+      phys.addBox(px, pz, 1.3, 0.58, cyaw, gy, gy + 1.06, { tag: 'car' });
+      // the officer on duty
+      const ox = best.mx + best.nx * 2 + Math.cos(yawW) * 1.5, oz = best.mz + best.nz * 2 - Math.sin(yawW) * 1.5;
+      g.npc({ skin: 0x9c6a48, hair: 0x1f1a16, shirt: 0x2a3f78, bottom: 0x1e2a44, hat: 'cap', hatColor: 0x1e2a44, stache: true }, 'Agente Colón', ox, oz, yawW, async (g) => g.ui.say('Agente Colón', [
+        { es: `¡Buenas, ${g.playerName}! Precinto La Guancha, a la orden.`, en: `Good day, ${g.playerName}! La Guancha precinct, at your service.` },
+        { es: 'Por favor, no le des comida frita a los pelícanos. Después no hay quien los aguante.', en: "Please don't feed fried food to the pelicans. They get unbearable." },
+        { es: 'Y si vas pal\' bosquecito detrás de la playa... dicen que allí se "observan pájaros". Yo no pregunto.', en: 'And if you head to the little woods behind the beach... they say people go "birdwatching" there. I don\'t ask.' },
+      ]));
+    }
+  }
 
   const yacht = info.boats.filter(b => !b.sail).sort((a, b) => b.top - a.top || b.L - a.L)[0];
   g.mask('yate', { es: 'El yate más alto', en: 'The tallest yacht' }, yacht.x, yacht.top + 1.2, yacht.z);
@@ -739,6 +796,82 @@ export function defineLevel(g) {
       fish.instanceMatrix.needsUpdate = true;
     },
   });
+  // schools of little reef fish around the bay and the reef; they scatter when you swim close
+  {
+    const COLORS = [0x3a7bff, 0xffd23f, 0x3ad6b8, 0xff8a3d, 0xc8d8e8, 0xff6fa8];
+    const schools = [];
+    const Rf = rng(77);
+    const bnd = data.bounds;
+    for (let tries = 0; tries < 4000 && schools.length < 20; tries++) {
+      const x = bnd.x0 + Rf() * (bnd.x1 - bnd.x0), z = bnd.z0 + Rf() * (bnd.z1 - bnd.z0);
+      const depth = -H(x, z);
+      if (depth < 1.2 || depth > 7) continue;
+      if (schools.some(q => dist2(q.x, q.z, x, z) < 25)) continue;
+      schools.push({ x, z, depth, color: COLORS[schools.length % COLORS.length], n: 8 + Math.floor(Rf() * 6), ph: Rf() * 10, r: 1.8 + Rf() * 2 });
+    }
+    const total = schools.reduce((a, q) => a + q.n, 0);
+    const reef = new THREE.InstancedMesh(M.reefFishGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x111111 }), total);
+    reef.frustumCulled = false;
+    const col = new THREE.Color();
+    let k = 0;
+    for (const q of schools) for (let i = 0; i < q.n; i++) reef.setColorAt(k++, col.setHex(q.color).offsetHSL((Rf() - 0.5) * 0.04, 0, (Rf() - 0.5) * 0.1));
+    scene.add(reef);
+    const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), v4 = new THREE.Vector3(), s4 = new THREE.Vector3(1.3, 1.3, 1.3);
+    g.animals.push({
+      update(dt, now) {
+        const P = g.player.pos;
+        let k = 0;
+        for (const q of schools) {
+          // the school drifts in a slow loop around its home
+          const cx = q.x + Math.sin(now * 0.07 + q.ph) * 4, cz = q.z + Math.cos(now * 0.05 + q.ph) * 4;
+          const cy = -Math.min(q.depth - 0.5, 1 + q.depth * 0.4);
+          const scare = Math.max(0, 1 - dist2(P.x, P.z, cx, cz) / 5) * (P.y < 0.5 ? 1 : 0.3);
+          for (let i = 0; i < q.n; i++) {
+            const a = now * (0.7 + (i % 3) * 0.1) + i / q.n * Math.PI * 2 + q.ph;
+            const r = q.r * (1 + scare * 1.6) + (i % 4) * 0.3;
+            const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r * 0.7;
+            e4.set(0, -a, Math.sin(now * 8 + i) * 0.15);
+            q4.setFromEuler(e4);
+            m4.compose(v4.set(x, cy + Math.sin(now * 1.3 + i) * 0.25 + (i % 3 - 1) * 0.3, z), q4, s4);
+            reef.setMatrixAt(k++, m4);
+          }
+        }
+        reef.instanceMatrix.needsUpdate = true;
+      },
+    });
+  }
+
+  // tame pelicans perched on the boardwalk railing (people feed them there); they turn to look at
+  // you and flap when you walk right up
+  {
+    const perched = [0.12, 0.3, 0.47, 0.63, 0.8, 0.93].map((f, i) => {
+      const p = along(fromNorth(f), 0.72 + 2.1 - 0.08);
+      const bird = M.pelicanMesh();
+      bird.scale.setScalar(1.15);
+      bird.position.set(p.x, deckY + 0.66, p.z);
+      bird.rotation.y = Math.atan2(p.nx, p.nz) + (i % 2 ? 0.6 : -0.6);
+      g.root.add(bird);
+      return { bird, base: bird.rotation.y, flap: 0, ph: i * 1.7 };
+    });
+    g.animals.push({
+      update(dt, now) {
+        const P = g.player.pos;
+        for (const q of perched) {
+          const d = dist2(P.x, P.z, q.bird.position.x, q.bird.position.z);
+          if (d > 60) continue;
+          const want = d < 6 ? Math.atan2(P.x - q.bird.position.x, P.z - q.bird.position.z) : q.base + Math.sin(now * 0.3 + q.ph) * 0.4;
+          let r = want - q.bird.rotation.y;
+          r = Math.atan2(Math.sin(r), Math.cos(r));
+          q.bird.rotation.y += r * Math.min(1, dt * 3);
+          if (d < 2.2 && q.flap <= 0) { q.flap = 1.2; g.sfx.play('pelican'); }
+          q.flap -= dt;
+          const w = q.bird.userData.wings, f = q.flap > 0 ? Math.sin(now * 14) * 0.9 : 0.05;
+          w[0].rotation.z = f; w[1].rotation.z = -f;
+        }
+      },
+    });
+  }
+
   // pelicans gliding over the bay
   const flyers = [0, 1, 2].map(i => { const p = M.pelicanMesh(); p.scale.setScalar(1.2); g.root.add(p); return p; });
   g.animals.push({
@@ -794,6 +927,7 @@ export function defineLevel(g) {
   };
   const mothPark = mothSpot(pkx + 4, pkz + 4);
   buildMothQuest(g, { top, H, park: mothPark, carmen, carmenFace: Math.atan2(sf.nx, sf.nz), along, total, deckY });
+  buildAvesQuest(g, { top, H, onLane, dist2 });
 
   buildProps(g, props);
   buildCrowd(g, along, fromNorth, total);

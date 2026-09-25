@@ -20,10 +20,11 @@ function pixels(img) {
 }
 
 export async function loadData(onProgress = () => {}) {
-  const [world, himg, cimg] = await Promise.all([
+  const [world, himg, cimg, canimg] = await Promise.all([
     fetch('data/world.json').then(r => r.json()),
     loadImage('data/terrain_h.png'),
     loadImage('data/terrain_c.jpg'),
+    loadImage('data/canopy.png').catch(() => null),
   ]);
   onProgress(0.3);
   const f = world.frame;
@@ -46,8 +47,19 @@ export async function loadData(onProgress = () => {}) {
     return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
   }
 
+  // real woods from LiDAR (tools/build_canopy.py): vegetation height in meters at world (X, Z)
+  let canopyH = () => 0;
+  if (canimg) {
+    const cp = pixels(canimg), cw = canimg.width, ch = canimg.height;
+    const cs = (f.x1 - f.x0) / cw * S;
+    canopyH = (X, Z) => {
+      const i = Math.floor((X - X0) / cs), j = Math.floor((Z - Z0) / cs);
+      return i < 0 || j < 0 || i >= cw || j >= ch ? 0 : cp[(j * cw + i) * 4] / 10;
+    };
+  }
+
   return {
-    world, heights, gw, gh, step, X0, Z0, terrainH, colorImg: cimg,
+    world, heights, gw, gh, step, X0, Z0, terrainH, canopyH, colorImg: cimg, canopyImg: canimg,
     bounds: { x0: f.x0 * S, x1: f.x1 * S, z0: -f.y1 * S, z1: -f.y0 * S },
   };
 }

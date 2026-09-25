@@ -243,6 +243,40 @@ export function buildProps(g, props) {
     solid(x, z, 1.1, 0.45, yaw, y, y + 0.76, 'table');
   }
 
+  // ---------------------------------------------------------------- kiosk fronts: awning, bar counter, stools, menu board
+  // plain green metal awnings like the real kiosks (two shades so the ribs show)
+  const AWN = [[0x3a9a86, 0x33897a]];
+  ks.forEach((k, i) => {
+    const f = k.front;
+    if (!f) return;
+    const nl = Math.hypot(f.nx, f.nz) || 1, nx = f.nx / nl, nz = f.nz / nl;
+    const tx = -nz, tz = nx;
+    // how wide is this side of the kiosk?
+    const c = Math.cos(k.yaw), s = Math.sin(k.yaw);
+    const ox = nx * c - nz * s;
+    const w = (Math.abs(ox) > 0.7 ? k.hz : k.hx) * 2;
+    const yawT = Math.atan2(-tz, tx);
+    const y0 = top(f.x + nx * 0.9, f.z + nz * 0.9); // where the vendor stands
+    // striped awning sloping out over the counter
+    const [ca, cb] = AWN[i % AWN.length];
+    const stripes = 7;
+    for (let j = 0; j < stripes; j++) {
+      const u = (j + 0.5) / stripes - 0.5;
+      box(j % 2 ? cb : ca, f.x + nx * 0.55 + tx * u * w * 0.9, k.eave - 0.95, f.z + nz * 0.55 + tz * u * w * 0.9, w * 0.9 / stripes + 0.01, 0.05, 1.15, yawT, -0.5);
+    }
+    // bar counter and stools
+    box(0x8a5a3c, f.x + nx * 1.4, y0 + 1.05, f.z + nz * 1.4, w * 0.7, 0.08, 0.4, yawT); // the vendor stands behind it
+    for (const u of [-0.3, 0, 0.3]) {
+      const sx = f.x + nx * 2.05 + tx * u * w, sz = f.z + nz * 2.05 + tz * u * w, sy = top(sx, sz);
+      props.add(P.cyl(8), 0xb33a2a, sx, sy + 0.72, sz, 0.36, 0.08, 0.36);
+      props.add(P.cyl(5), 0x555a60, sx, sy + 0.36, sz, 0.07, 0.72, 0.07);
+    }
+    // a little menu chalkboard at the corner
+    const mx = f.x + nx * 1.5 + tx * (w / 2 + 0.3), mz = f.z + nz * 1.5 + tz * (w / 2 + 0.3);
+    box(0x1f3a2e, mx, top(mx, mz) + 0.5, mz, 0.6, 0.95, 0.07, yawT, 0.18);
+    box(0x8a5a3c, mx, top(mx, mz) + 0.99, mz, 0.66, 0.06, 0.1, yawT, 0.18);
+  });
+
   // ---------------------------------------------------------------- tarima (open-air stage)
   const north = tab[0][1] < tab[tab.length - 1][1] ? tab[0] : tab[tab.length - 1];
   const st = freeSpot(north[0] + 14, north[1] + 8, 4.2, 30);

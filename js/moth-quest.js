@@ -138,7 +138,12 @@ export function buildMothQuest(g, places) {
   const hearts = (k = 5) => g.fx.emit(mothRoot.position.x, mothRoot.position.y + cat.base + 1, mothRoot.position.z, k,
     { color: 0xff7aa8, speed: 1.4, up: 2.4, life: 0.8, grav: -1 });
   const clock = secs => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-  const toastMoth = l => g.ui.toast(`🐈‍⬛ Moth: ${tr(l)}`, 2.6);
+  // her pestering pops up as a notice, with her babble voice like any other line
+  const toastMoth = l => {
+    const text = tr(l);
+    g.ui.toast(`🐈‍⬛ Moth: ${text}`, 2.6);
+    [...text.replace(/[^\p{L}]/gu, '')].slice(0, 12).forEach((ch, i) => setTimeout(() => g.sfx.voice('Moth', ch), i * 70));
+  };
   const setStage = s => { g.q.moth2 = s; g.save(); };
 
   function petMeter() {

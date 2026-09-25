@@ -138,15 +138,35 @@ export function buildCrowd(g, along, fromNorth, total) {
   for (const f of [0.15, 0.4, 0.62, 0.85]) {
     const p = along(fromNorth(f), 0.72 + 1.75);
     const n = person(R() < 0.5 ? 'Don Cheo' : 'Papo', M.randomLook(R, { hat: R() < 0.5 ? 'pava' : 'cap', dress: false }), p.x, p.z, Math.atan2(p.nx, p.nz));
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.025, 2.4, 4), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
-    rod.position.set(0.25, 0.1, 0.7); rod.rotation.x = 1.05;
-    n.m.body.add(rod);
+    // rod held in both hands (arms reach forward), angled up over the railing, line down to a bobber
     n.m.arms[0].rotation.x = n.m.arms[1].rotation.x = -1.1;
+    const rod = new THREE.Group();
+    rod.position.set(0, 0.2, 0.3); // at the hands
+    rod.rotation.x = 0.9;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 2.6, 5), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
+    pole.position.y = 1.3;
+    rod.add(pole);
+    const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.06, 8), new THREE.MeshLambertMaterial({ color: 0x777c84 }));
+    reel.position.set(0, 0.35, 0.05); reel.rotation.z = Math.PI / 2;
+    rod.add(reel);
+    n.m.body.add(rod);
+    // the line hangs from the tip to the water (the body sits 0.52 above the feet)
+    const tipY = 0.52 + 0.2 + 2.6 * Math.cos(0.9), tipZ = 0.3 + 2.6 * Math.sin(0.9);
+    const drop = tipY + n.y - 0.05;
+    const lineMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, drop, 3), new THREE.MeshBasicMaterial({ color: 0xdddddd }));
+    lineMesh.position.set(0, tipY - drop / 2, tipZ);
+    n.m.root.add(lineMesh);
+    const bobber = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshLambertMaterial({ color: 0xe8452f }));
+    bobber.position.set(0, tipY - drop, tipZ);
+    n.m.root.add(bobber);
     n.lines = [
       { es: 'Shhh… que se espantan los peces. Aquí pican los sábalos y los róbalos.', en: 'Shhh… you’ll scare the fish. Tarpon and snook bite here.' },
       { es: 'Ayer saqué un sábalo así de grande. ¡Pero lo solté!', en: 'Yesterday I hooked a tarpon this big. But I let it go!' },
     ];
-    n.update = (dt, now) => { rod.rotation.z = Math.sin(now * 0.8 + f * 9) * 0.05; };
+    n.update = (dt, now) => {
+      rod.rotation.z = Math.sin(now * 0.8 + f * 9) * 0.05;
+      bobber.position.y = tipY - drop + Math.sin(now * 2.2 + f * 5) * 0.03;
+    };
   }
 
   // ---- people sitting on benches (find bench colliders)
@@ -217,7 +237,8 @@ export function buildCrowd(g, along, fromNorth, total) {
     const f = k.front, l = Math.hypot(f.nx, f.nz) || 1;
     const x = f.x + f.nx / l * 0.9, z = f.z + f.nz / l * 0.9;
     const n = person(NAMES[Math.floor(R() * NAMES.length)], { ...M.randomLook(R), apron: true }, x, z, Math.atan2(f.nx, f.nz));
-    n.lines = [FOOD_LINES[k.food] || { es: '¡Pasa y prueba, que está bueno!', en: 'Come try it, it’s good!' },
+    n.lines = [{ es: `¡Bienvenido a ${k.title}, el Kiosko #${k.num}!`, en: `Welcome to ${k.title}, Kiosko #${k.num}!` },
+      FOOD_LINES[k.food] || { es: '¡Pasa y prueba, que está bueno!', en: 'Come try it, it’s good!' },
       { es: '¿Tú no eres el de las máscaras? ¡Suerte, mijo!', en: 'Aren’t you the mask hunter? Good luck, kid!' }];
     n.update = (dt, now) => { n.m.arms[1].rotation.x = -0.4 + Math.sin(now * 2 + x) * 0.3; };
   }

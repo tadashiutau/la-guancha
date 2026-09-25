@@ -6,10 +6,12 @@ import { Batch, P, prismTris, hipRoofTris, polyArea, rng, prim } from './geo.js'
 import { buildFoliage } from './foliage.js';
 
 const C = {
-  deck: 0x9a8570, deck2: 0x8b7762, rail: 0x7b3a26, piling: 0x5a4636,
+  // colors from photos of the real boardwalk: cream-yellow railings, lavender kiosks with white
+  // trim and sea-green roofs, a pale tower with yellow wooden walkways
+  deck: 0x9d978a, deck2: 0x8f897d, rail: 0xe6d49a, piling: 0x5a4636,
   lamp: 0x2f7f76, lampGlass: 0xfff3c4, planter: 0xb9ae9c, shrub: 0x3f8f4a,
-  kioskWall: 0xf2a48c, kioskTrim: 0xfbe3d2, kioskRoof: 0x2d6a4c, window: 0x3b4b5a,
-  towerWood: 0x8a5a3c, towerCore: 0xf1ead8, towerRoof: 0x2d6a4c,
+  kioskWalls: [0x9d97d6, 0x8494da, 0xa99ad8, 0x8fa0dc], kioskTrim: 0xf6f4ee, kioskRoof: 0x3a9a86, window: 0x3b4b5a,
+  towerWood: 0xdcc684, towerCore: 0xebe8e0, towerRoof: 0x3a9a86,
   pier: 0xb8a58a, pierFloat: 0xd8d2c4, hull: 0xf7f7f2, trunk: 0x8a6a4a, palm: 0x4f9a3a, palm2: 0x6fb04a,
   tree: 0x3f8a3c, tree2: 0x5aa446, mangrove: 0x2f6e36, rock: 0x8f887c, coconut: 0x6b4a2a,
 };
@@ -148,12 +150,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
     if (isKiosk) {
       const eave = base + 3.1 * S * 1.15;
       const rect = rectPts(cx, cz, hx, hz, rang);
-      batch.addTris(prismTris(rect, base - 0.3, eave, false), C.kioskWall);
+      batch.addTris(prismTris(rect, base - 0.3, eave, false), C.kioskWalls[info.kiosks.length % C.kioskWalls.length]);
       // trim band and dark serving windows all around
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.02, hz + 0.02, rang), eave - 0.18, eave, false), C.kioskTrim);
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz * 0.7, rang), base + 0.75, base + 1.45, false), C.window);
       batch.addTris(prismTris(rectPts(cx, cz, hx * 0.8, hz + 0.03, rang), base + 0.75, base + 1.45, false), C.window);
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.05, hz + 0.05, rang), base + 0.72, base + 0.8, false), C.kioskTrim);
+      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, rang), base - 0.3, base + 0.35, false), 0xc2b27a); // khaki base band
       const slope = 0.55, cap = 1.4;
       batch.addTris(hipRoofTris(cx, cz, hx, hz, rang, eave, slope, cap, 0.45), C.kioskRoof);
       phys.add(rectPts(cx, cz, hx + 0.45, hz + 0.45, rang), eave - 0.3, eave, { tag: 'roof', roof: slope, cap });
@@ -210,7 +213,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
       const y = base + (i + 1) * rise;
       const yaw = Math.atan2(-(z2 - z), x2 - x);
       const len = Math.hypot(x2 - x, z2 - z) + 0.25;
-      batch.add(P.box(), i % 2 ? C.towerWood : 0x9a6a4a, (x + x2) / 2, y - 0.12, (z + z2) / 2, len, 0.24, Rout - Rin, yaw);
+      batch.add(P.box(), i % 2 ? C.towerWood : 0xcdb672, (x + x2) / 2, y - 0.12, (z + z2) / 2, len, 0.24, Rout - Rin, yaw);
       phys.addBox((x + x2) / 2, (z + z2) / 2, len / 2, (Rout - Rin) / 2, yaw, y - 0.5, y, { tag: 'step' });
       if (i % 2 === 0) {
         const [ox, oz] = sq(a, Rout - 0.05);
@@ -457,11 +460,18 @@ export function buildWorld(scene, data, phys, { mobile }) {
     }
   }
 
+  // leafy greens, picked per blob so groves aren't one flat color
+  const LEAF = [0x3f8a3c, 0x4a9440, 0x5aa446, 0x367a34, 0x66a848, 0x2f7436, 0x78b04c];
+  const leaf = () => LEAF[Math.floor(R() * LEAF.length)];
+
   // ---------------------------------------------------------------- trees (LiDAR)
   const tops = [];
+  // no trees inside the fountains (they're built later)
+  const fountains = W.poi.filter(p => p.t.amenity === 'fountain').map(p => [p.p[0] * S, -p.p[1] * S]);
+  const inFountain = (x, z) => fountains.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 6);
   for (const [x, y, h, rad, kind] of W.trees) {
     const px = x * S, pz = -y * S, g = H(px, pz);
-    if (g < 0.1) continue;
+    if (g < 0.1 || inFountain(px, pz)) continue;
     if (phys.near(px, pz, 0.5).some(c => c.tag === 'kiosk' || c.tag === 'bld' || c.tag === 'deck')) continue;
     const hh = Math.min(h, 16) * S;
     let top;
@@ -471,6 +481,54 @@ export function buildWorld(scene, data, phys, { mobile }) {
     tops.push([px, pz, kind, top]);
   }
   info.trees = tops;
+
+  // ---------------------------------------------------------------- woods (LiDAR canopy map)
+  // LiDAR peaks give one tree per crown and miss dense stands, so fill the real woods: extra
+  // trees on a jittered grid wherever the canopy map says there's forest, bushes at its edges.
+  {
+    const cell = 3.3;
+    const taken = new Map();
+    const key = (x, z) => `${Math.floor(x / 3)},${Math.floor(z / 3)}`;
+    for (const [px, pz] of tops) taken.set(key(px, pz), true);
+    const near = (x, z) => {
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (taken.has(`${Math.floor(x / 3) + i},${Math.floor(z / 3) + j}`)) return true;
+      return false;
+    };
+    const roadsW = W.roads.map(r => ({ p: wpts(r.p), w: r.w * S / 2 + 1.2 }));
+    const onRoad = (x, z) => roadsW.some(({ p, w }) => p.some((q, i) => {
+      if (!i) return false;
+      const [ax, az] = p[i - 1], ex = q[0] - ax, ez = q[1] - az, l2 = ex * ex + ez * ez || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2));
+      return Math.hypot(x - ax - ex * t, z - az - ez * t) < w;
+    }));
+    const wet = (W.wetland || []).map(wpts);
+    const b = data.bounds;
+    let added = 0, bushes = 0;
+    for (let z = b.z0 + 2; z < b.z1 - 2; z += cell) {
+      for (let x = b.x0 + 2; x < b.x1 - 2; x += cell) {
+        const jx = x + (R() - 0.5) * cell * 0.8, jz = z + (R() - 0.5) * cell * 0.8;
+        const ch = data.canopyH(jx, jz);
+        if (ch < 2.5) continue;
+        const g = H(jx, jz);
+        if (g < 0.2 || near(jx, jz) || inFountain(jx, jz)) continue;
+        if (phys.near(jx, jz, 1.2).some(c => c.solid || c.tag === 'deck')) continue;
+        if (onRoad(jx, jz)) continue;
+        taken.set(key(jx, jz), true);
+        const h = Math.min(ch, 14) * S * (0.85 + R() * 0.3);
+        if (wet.some(p => inPoly(jx, jz, p))) mangrove(jx, g, jz, Math.min(h, 4), 1.4 + R() * 0.6);
+        else broadTree(jx, g, jz, h, Math.min(3.2, 1.3 + h * 0.18) * (0.8 + R() * 0.4));
+        added++;
+        // the edge of the woods gets undergrowth
+        const edge = [[cell, 0], [-cell, 0], [0, cell], [0, -cell]].some(([dx, dz]) => data.canopyH(jx + dx, jz + dz) < 1);
+        if (edge && R() < 0.7) {
+          const a = R() * 6.28, bx = jx + Math.cos(a) * 1.8, bz = jz + Math.sin(a) * 1.8;
+          if (H(bx, bz) > 0.2 && !onRoad(bx, bz)) { bush(bx, H(bx, bz), bz, 0.9 + R() * 0.7); bushes++; }
+        }
+      }
+    }
+    info.forestTrees = added;
+    info.bushes = bushes;
+  }
 
   function palm(x, g, z, h) {
     const lean = (R() - 0.5) * 0.35, dir = R() * Math.PI * 2;
@@ -499,36 +557,64 @@ export function buildWorld(scene, data, phys, { mobile }) {
     return py;
   }
 
-  function broadTree(x, g, z, h, r) {
-    const th = h * 0.45;
-    batch.add(P.frustum(0.7, 6), C.trunk, x, g + th / 2, z, 0.45, th, 0.45);
-    const tree = { x, y: g + th + r * 0.5, z, radius: r * 1.1, opacity: 1, pieces: [], refs: [] };
-    foliageTrees.push(tree);
-    const blobs = 3;
-    for (let i = 0; i < blobs; i++) {
-      const a = R() * 6.28, d = r * 0.35;
-      const s = r * (0.85 + R() * 0.35);
-      tree.pieces.push({ kind: 'broad', color: R() < 0.5 ? C.tree : C.tree2,
-        x: x + Math.cos(a) * d, y: g + th + s * 0.35 + i * 0.2,
-        z: z + Math.sin(a) * d, sx: s * 1.2, sy: s * 0.8, sz: s * 1.2, yaw: R() * 6 });
+  // a broadleaf tree: the trunk runs up into a rounded crown of overlapping blobs
+  // (a center blob, a ring around it and one on top), so the crown sits squarely on the trunk
+  function broadTree(x, g, z, h, r, lean = true) {
+    const th = h * 0.42;
+    const cy = g + th + r * 0.45;
+    const tx = lean ? (R() - 0.5) * 0.15 * r : 0, tz = lean ? (R() - 0.5) * 0.15 * r : 0;
+    batch.add(P.frustum(0.6, 6), C.trunk, x + tx / 2, (g + cy) / 2, z + tz / 2, 0.42, cy - g, 0.42, 0, tz / (cy - g), -tx / (cy - g));
+    for (const a of [R() * 6.28, R() * 6.28 + 2.4]) {
+      // two branches reaching into the crown
+      batch.add(P.cyl(4), C.trunk, x + Math.cos(a) * r * 0.25, g + th + r * 0.2, z + Math.sin(a) * r * 0.25, 0.12, r * 0.7, 0.12,
+        0, Math.sin(a) * 0.8, -Math.cos(a) * 0.8);
     }
+    const tree = { x: x + tx, y: cy, z: z + tz, radius: r * 1.15, opacity: 1, pieces: [], refs: [] };
+    foliageTrees.push(tree);
+    const add = (kind, px, py, pz, s, flat = 0.78) => tree.pieces.push({ kind, color: leaf(),
+      x: px, y: py, z: pz, sx: s, sy: s * flat, sz: s, yaw: R() * 6 });
+    add('broad', x + tx, cy, z + tz, r * 1.7);
+    const ring = 4 + (R() < 0.5 ? 1 : 0), a0 = R() * 6.28;
+    for (let i = 0; i < ring; i++) {
+      const a = a0 + i / ring * Math.PI * 2 + (R() - 0.5) * 0.5;
+      add('leaf', x + tx + Math.cos(a) * r * 0.62, cy - r * 0.12 + R() * r * 0.2, z + tz + Math.sin(a) * r * 0.62, r * (1.0 + R() * 0.3));
+    }
+    add('leaf', x + tx + (R() - 0.5) * r * 0.3, cy + r * 0.5, z + tz + (R() - 0.5) * r * 0.3, r * 1.1);
     phys.addBox(x, z, 0.22, 0.22, 0, g - 0.5, g + th, { tag: 'trunk', ground: false });
-    phys.add(circle(x, z, r * 0.8, 7), g + th + r * 0.3, g + th + r * 0.75, { tag: 'canopy', solid: false });
-    return g + th + r * 0.75;
+    phys.add(circle(x, z, r * 0.8, 7), cy - r * 0.2, cy + r * 0.45, { tag: 'canopy', solid: false });
+    return cy + r * 0.45;
   }
 
+  // mangroves: a knot of arching prop roots under a low, dense, dark crown
   function mangrove(x, g, z, h, r) {
-    const tree = { x, y: g + h * 0.65, z, radius: Math.max(1.2, r) * 1.2, opacity: 1, pieces: [], refs: [] };
+    r = Math.max(1.2, r);
+    const cy = g + h * 0.62;
+    const tree = { x, y: cy, z, radius: r * 1.2, opacity: 1, pieces: [], refs: [] };
+    foliageTrees.push(tree);
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2 + R();
+      batch.add(P.cyl(4), C.trunk, x + Math.cos(a) * 0.35, g + h * 0.18, z + Math.sin(a) * 0.35, 0.08, h * 0.45, 0.08,
+        0, Math.sin(a) * 0.5, -Math.cos(a) * 0.5);
+    }
+    batch.add(P.cyl(5), C.trunk, x, g + h * 0.35, z, 0.22, h * 0.5, 0.22);
+    for (let i = 0; i < 4; i++) {
+      const a = R() * 6.28, d = i ? r * 0.5 : 0, s = r * (1.1 + R() * 0.4);
+      tree.pieces.push({ kind: 'mangrove', color: R() < 0.5 ? C.mangrove : 0x3a7a3a,
+        x: x + Math.cos(a) * d, y: cy + (i ? -0.1 : 0.2), z: z + Math.sin(a) * d, sx: s * 1.3, sy: s * 0.7, sz: s * 1.3, yaw: R() * 6 });
+    }
+    phys.add(circle(x, z, r * 0.7, 6), cy - 0.2, cy + r * 0.4, { tag: 'canopy', solid: false });
+    return cy + r * 0.4;
+  }
+
+  // a low leafy bush (undergrowth at the edge of the woods)
+  function bush(x, g, z, s) {
+    const tree = { x, y: g + s * 0.35, z, radius: s * 0.8, opacity: 1, pieces: [], refs: [] };
     foliageTrees.push(tree);
     for (let i = 0; i < 3; i++) {
-      const a = R() * 6.28, d = r * 0.4, s = Math.max(1.2, r) * (0.9 + R() * 0.5);
-      tree.pieces.push({ kind: 'mangrove', color: C.mangrove,
-        x: x + Math.cos(a) * d, y: g + h * 0.55 + i * 0.15,
-        z: z + Math.sin(a) * d, sx: s * 1.3, sy: s * 0.8, sz: s * 1.3, yaw: R() * 6 });
+      const a = R() * 6.28, d = i ? s * 0.35 : 0;
+      tree.pieces.push({ kind: 'bush', color: R() < 0.5 ? 0x3d7f37 : 0x4f9140, x: x + Math.cos(a) * d, y: g + s * 0.3,
+        z: z + Math.sin(a) * d, sx: s * (1 - i * 0.15), sy: s * 0.7, sz: s * (1 - i * 0.15), yaw: R() * 6 });
     }
-    batch.add(P.cyl(5), C.trunk, x, g + h * 0.25, z, 0.25, h * 0.5, 0.25);
-    phys.add(circle(x, z, Math.max(1.2, r) * 0.7, 6), g + h * 0.5, g + h * 0.8, { tag: 'canopy', solid: false });
-    return g + h * 0.8;
   }
 
   function circle(x, z, r, n) {
@@ -588,11 +674,47 @@ export function buildWorld(scene, data, phys, { mobile }) {
     batch.add(P.cyl(16), 0x4fb8d8, x, g + 0.35, z, (r - 0.4) * 2, 0.1, (r - 0.4) * 2);
     phys.add(ring, g, g + 0.6, { tag: 'fountain' });
     phys.add(inner, g, g + 0.3, { tag: 'fountainwater', solid: false });
+    if (big) {
+      // Fuente del León Ponceño (María Elena Perales): Ponce's golden lion standing on a red-brick
+      // bridge over the fountain, on a gray base. The lion is Ponce's symbol.
+      const yaw = 0.35, cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const at = (u, v) => [x + u * cy + v * sy, z - u * sy + v * cy];
+      batch.add(P.box(), 0x9a9a98, x, g + 0.45, z, 5.6, 0.5, 1.9, yaw);
+      const n = 9, span = 6.4, rise = 1.5;
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.5) / n - 0.5, h = 0.7 + rise * (1 - (2 * u) ** 2);
+        const [bx, bz] = at(u * span, 0);
+        batch.add(P.box(), i % 2 ? 0xb24a32 : 0xa3412c, bx, g + h / 2 + 0.2, bz, span / n + 0.02, h, 1.5, yaw);
+      }
+      const deckY = g + 0.2 + 0.7 + rise;
+      batch.add(P.box(), 0xd8d2c4, x, deckY + 0.06, z, 2.6, 0.12, 1.6, yaw);
+      phys.addBox(x, z, 1.3, 0.8, yaw, g, deckY + 0.12, { tag: 'bridge' });
+      for (const u of [-2.2, 2.2]) { const [bx, bz] = at(u, 0); phys.addBox(bx, bz, 1.0, 0.75, yaw, g, g + 0.2 + 0.7 + rise * 0.55, { tag: 'bridge' }); }
+      // the lion, standing proud
+      const gold = 0xe0b040, mane = 0xc98d2a;
+      // lion parts: u = side to side, v = nose to tail along the bridge
+      const L2 = (u, v, dy, sx, sy2, sz, prim = P.box(), col = gold, rx = 0, rz = 0) => {
+        const [lx, lz] = at(v, u);
+        batch.add(prim, col, lx, deckY + dy, lz, sx, sy2, sz, yaw + Math.PI / 2, rx, rz);
+      };
+      const ly = 0.12;
+      L2(0, 0, ly + 1.0, 0.9, 0.85, 1.9, P.sphere(10, 8));                         // body
+      for (const [u, v] of [[-0.28, 0.6], [0.28, 0.6], [-0.28, -0.6], [0.28, -0.6]]) L2(u, v, ly + 0.42, 0.26, 0.85, 0.26, P.cyl(6));
+      L2(0, 0.95, ly + 1.55, 1.25, 1.25, 1.0, P.dodeca(), mane);                   // mane
+      L2(0, 1.25, ly + 1.55, 0.62, 0.6, 0.6, P.sphere(8, 6));                       // face
+      L2(0, 1.52, ly + 1.45, 0.32, 0.24, 0.26, P.box());                            // muzzle
+      for (const u of [-0.18, 0.18]) L2(u, 1.5, ly + 1.66, 0.08, 0.08, 0.05, P.sphere(4, 3), 0x3a2a10);
+      L2(0, -1.05, ly + 1.2, 0.1, 0.1, 0.9, P.cyl(5), gold, 0.9);                    // tail
+      L2(0, -1.4, ly + 1.55, 0.26, 0.26, 0.26, P.dodeca(), mane);                   // tail tuft
+      phys.addBox(x, z, 0.5, 1.0, yaw + Math.PI / 2, deckY, deckY + 1.55, { tag: 'lion' });
+      info.fountainBig = { x, z, g, top: deckY + 2.3 };
+      continue;
+    }
     // tiered centerpiece
-    const tiers = big ? 3 : 2;
+    const tiers = 2;
     let y = g;
     for (let i = 0; i < tiers; i++) {
-      const pr = 0.5 - i * 0.1, ph = big ? 2.2 : 1.4;
+      const pr = 0.5 - i * 0.1, ph = 1.4;
       batch.add(P.cyl(8), 0xe8e0d0, x, y + ph / 2, z, pr, ph, pr);
       y += ph;
       const br = (tiers - i) * 0.7 + 0.2;
@@ -601,7 +723,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
       phys.add(circle(x, z, pr / 2 + 0.05, 6), y - ph, y - 0.2, { tag: 'tierpole' });
     }
     batch.add(P.sphere(8, 6), 0xd9b44a, x, y + 0.35, z, 0.5, 0.5, 0.5);
-    info[big ? 'fountainBig' : 'fountainPark'] = { x, z, g, top: y + 0.15 };
+    info.fountainPark = { x, z, g, top: y + 0.15 };
   }
 
   // ---------------------------------------------------------------- backdrop
@@ -738,10 +860,31 @@ function groundMap(data) {
       g.closePath(); g.fill();
     }
   };
+  // clean game colors, with a little of the photo's detail still showing through
+  g.globalAlpha = 0.8;
   fill(data.world.wetland, '#748867');
   fill(data.world.park, '#75a65c');
   fill(data.world.beach, '#dec797');
+  g.globalAlpha = 0.9;
   fill(data.world.parking, '#999997');
+  g.globalAlpha = 1;
+  // shade the forest floor under the real woods (LiDAR canopy map)
+  if (data.canopyImg) {
+    const m = document.createElement('canvas');
+    m.width = data.canopyImg.width; m.height = data.canopyImg.height;
+    const mg = m.getContext('2d');
+    mg.drawImage(data.canopyImg, 0, 0);
+    const px = mg.getImageData(0, 0, m.width, m.height);
+    for (let i = 0; i < px.data.length; i += 4) {
+      const k = Math.min(1, px.data[i] / 60); // full shade from 6 m tall
+      px.data[i] = 34; px.data[i + 1] = 62; px.data[i + 2] = 30; px.data[i + 3] = k * 120;
+    }
+    mg.putImageData(px, 0, 0);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.filter = 'blur(6px)';
+    g.drawImage(m, 0, 0, c.width, c.height);
+    g.filter = 'none';
+  }
   return c;
 }
 
@@ -988,21 +1131,46 @@ function buildBackdrop(batch, data, W, R) {
 const FOODS = ['Bacalaítos', 'Empanadillas', 'Alcapurrias', 'Piraguas', 'Coco Frío', 'Pinchos', 'Sorullitos',
   'Mofongo', 'Tostones', 'Pastelillos', 'Limber', 'Arañitas', 'Mariscos', 'Chillo Frito', 'Jugos'];
 
+// Real kiosks on the Paseo Tablado (from reviews and listings): number, name and specialty.
+// The map has fewer kiosk buildings than the real ~21 kiosks, so each building gets the next real
+// one in number order. The middle one is Doña Carmen's (the game's shop, a made-up character).
+const REAL_KIOSKS = [
+  [4, 'La Boya', 'Chillo Frito'], [6, 'La Cava', 'Pastelillos'], [8, 'La Mexicana y Familia', 'Mofongo'],
+  [11, 'El Bohío', 'Tostones'], [15, 'El Pilón Borincano', 'Mofongo'], [17, 'Tango', 'Mariscos'],
+  [19, 'El Tablado Sports Bar', 'Pinchos'], [20, 'El Chapuzón', 'Alcapurrias'], [21, 'El 21 Familiar', 'Empanadillas'],
+  [13, 'Costanera', 'Bacalaítos'],
+];
+
 function buildSigns(scene, info, tab) {
   const ks = info.kiosks.slice().sort((a, b) => a.z - b.z);
+  const shopIdx = Math.floor(ks.length / 2); // matches the shop kiosk chosen in level.js
+  let next = 0;
   ks.forEach((k, i) => {
-    const name = FOODS[i % FOODS.length];
-    k.food = name;
+    let num, title, food, sub;
+    if (i === shopIdx) {
+      food = 'Piraguas'; num = 16; title = 'Doña Carmen'; sub = `Kiosko #${num} · ${food}`;
+    } else if (next < REAL_KIOSKS.length) {
+      [num, title, food] = REAL_KIOSKS[next++]; sub = `Kiosko #${num} · ${food}`;
+    } else {
+      num = 30 + i; food = FOODS[i % FOODS.length]; title = food; sub = `Kiosko #${num}`;
+    }
+    k.food = food; k.num = num; k.title = title;
     const c = document.createElement('canvas');
-    c.width = 256; c.height = 64;
+    c.width = 512; c.height = 160;
     const g = c.getContext('2d');
-    g.fillStyle = '#fff6e0'; g.fillRect(0, 0, 256, 64);
-    g.strokeStyle = '#2d6a4c'; g.lineWidth = 8; g.strokeRect(4, 4, 248, 56);
-    g.fillStyle = '#b33a2a'; g.font = 'bold 34px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(name, 128, 34);
+    g.fillStyle = '#fff6e0'; g.fillRect(0, 0, 512, 160);
+    g.strokeStyle = '#2d6a4c'; g.lineWidth = 12; g.strokeRect(6, 6, 500, 148);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = '#b33a2a';
+    let size = 62;
+    do { g.font = `bold ${size}px Georgia, serif`; size -= 2; } while (g.measureText(title).width > 470);
+    g.fillText(title, 256, 66);
+    g.fillStyle = '#2d6a4c'; g.font = 'bold 30px Trebuchet MS, sans-serif';
+    g.fillText(sub, 256, 125);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+    tex.anisotropy = 4;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.81), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
     // face the boardwalk: pick the rect side closest to it
     let best = null;
     for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {

@@ -121,8 +121,8 @@ export class Game {
     }).filter(region => region.total);
   }
 
-  mask(id, name, x, y, z, hidden = false) {
-    const m = { id, name, x, y, z, got: false, active: !hidden, variant: this.masks.length };
+  mask(id, name, x, y, z, hidden = false, variant = this.masks.length) {
+    const m = { id, name, x, y, z, got: false, active: !hidden, variant };
     const g = new THREE.Group();
     const mesh = M.maskMesh(m.variant);
     mesh.scale.setScalar(0.9);
