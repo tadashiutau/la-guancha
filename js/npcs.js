@@ -117,7 +117,7 @@ export function buildCrowd(g, along, fromNorth, total) {
   for (let i = 0; i < 14; i++) {
     const jog = i < 3;
     const n = person(NAMES[i % NAMES.length], M.randomLook(R, jog ? { hat: 'cap' } : {}), 0, 0, 0);
-    n.f = 0.05 + R() * 0.9; n.dir = R() < 0.5 ? 1 : -1; n.lane = 0.72 + (R() - 0.5) * 2.6;
+    n.f = 0.05 + R() * 0.9; n.dir = R() < 0.5 ? 1 : -1; n.lane = 0.9 + R() * 1.5; // the water-side half of the deck, clear of the kiosk counters
     n.speed = jog ? 3.4 : 1.0 + R() * 0.6;
     if (jog) n.name = { es: 'Corredora', en: 'Jogger' };
     n.update = (dt) => {

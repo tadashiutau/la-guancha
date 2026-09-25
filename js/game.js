@@ -167,7 +167,21 @@ export class Game {
   }
 
   flag(id, x, z, face = 0) {
-    const y = this.top(x, z);
+    // on open ground or the boardwalk: never inside a kiosk or up on a pergola, awning or tree
+    // crown. If the spot is taken, step outward until it's clear.
+    const ph = this.phys;
+    const clear = (px, pz) => !ph.near(px, pz, 0.8).some(c => {
+      if (!(c.solid || c.tag === 'canopy') || c.tag === 'deck') return false;
+      const d = ph.sdist(c, px, pz);
+      return d.inside || d.d < 0.6;
+    });
+    search: for (let r = 0; r < 12; r += 0.5) {
+      for (let k = 0, n = Math.max(1, Math.round(r * 6)); k < n; k++) {
+        const a = k / n * Math.PI * 2;
+        if (clear(x + Math.cos(a) * r, z + Math.sin(a) * r)) { x += Math.cos(a) * r; z += Math.sin(a) * r; break search; }
+      }
+    }
+    const y = ph.groundAt(x, z, ph.terrainH(x, z) + 0.9).h;
     const mesh = M.flagMesh();
     mesh.position.set(x, y, z);
     this.root.add(mesh);
@@ -696,7 +710,12 @@ export class Game {
       const cl = f.mesh.userData.cloth;
       // raised flags slide up the pole
       if (f.on && f.rise < 1) f.rise = Math.min(1, f.rise + dt * 1.6);
-      cl.position.y = 0.5 + (1 - Math.pow(1 - f.rise, 3)) * 2.3;
+      const k = 1 - Math.pow(1 - f.rise, 3);
+      cl.position.y = 0.5 + k * 2.3;
+      // furled (bunched against the pole) until it goes up, then it unfurls as it rises
+      const w = 0.28 + 0.72 * k;
+      cl.scale.set(w, 1, 1);
+      cl.position.x = 0.02 + 0.6 * w;
       const p = cl.geometry.attributes.position;
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i) + 0.6;

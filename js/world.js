@@ -494,7 +494,8 @@ export function buildWorld(scene, data, phys, { mobile }) {
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (taken.has(`${Math.floor(x / 3) + i},${Math.floor(z / 3) + j}`)) return true;
       return false;
     };
-    const roadsW = W.roads.map(r => ({ p: wpts(r.p), w: r.w * S / 2 + 1.2 }));
+    // keep roads and footpaths clear
+    const roadsW = [...W.roads.map(r => ({ p: wpts(r.p), w: r.w * S / 2 + 1.2 })), ...W.footways.map(p => ({ p: wpts(p), w: 1.9 }))];
     const onRoad = (x, z) => roadsW.some(({ p, w }) => p.some((q, i) => {
       if (!i) return false;
       const [ax, az] = p[i - 1], ex = q[0] - ax, ez = q[1] - az, l2 = ex * ex + ez * ez || 1;
@@ -561,12 +562,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
   // (a center blob, a ring around it and one on top), so the crown sits squarely on the trunk
   function broadTree(x, g, z, h, r, lean = true) {
     const th = h * 0.42;
-    const cy = g + th + r * 0.45;
+    // the crown's underside stays above head height so nobody walks through the leaves
+    const cy = Math.max(g + th + r * 0.45, g + 2.2 + r * 0.7);
     const tx = lean ? (R() - 0.5) * 0.15 * r : 0, tz = lean ? (R() - 0.5) * 0.15 * r : 0;
     batch.add(P.frustum(0.6, 6), C.trunk, x + tx / 2, (g + cy) / 2, z + tz / 2, 0.42, cy - g, 0.42, 0, tz / (cy - g), -tx / (cy - g));
     for (const a of [R() * 6.28, R() * 6.28 + 2.4]) {
       // two branches reaching into the crown
-      batch.add(P.cyl(4), C.trunk, x + Math.cos(a) * r * 0.25, g + th + r * 0.2, z + Math.sin(a) * r * 0.25, 0.12, r * 0.7, 0.12,
+      batch.add(P.cyl(4), C.trunk, x + Math.cos(a) * r * 0.25, cy - r * 0.35, z + Math.sin(a) * r * 0.25, 0.12, r * 0.7, 0.12,
         0, Math.sin(a) * 0.8, -Math.cos(a) * 0.8);
     }
     const tree = { x: x + tx, y: cy, z: z + tz, radius: r * 1.15, opacity: 1, pieces: [], refs: [] };
@@ -588,7 +590,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   // mangroves: a knot of arching prop roots under a low, dense, dark crown
   function mangrove(x, g, z, h, r) {
     r = Math.max(1.2, r);
-    const cy = g + h * 0.62;
+    const cy = Math.max(g + h * 0.62, g + 1.9 + r * 0.55);
     const tree = { x, y: cy, z, radius: r * 1.2, opacity: 1, pieces: [], refs: [] };
     foliageTrees.push(tree);
     for (let i = 0; i < 5; i++) {

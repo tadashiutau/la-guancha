@@ -243,7 +243,7 @@ export function buildProps(g, props) {
     solid(x, z, 1.1, 0.45, yaw, y, y + 0.76, 'table');
   }
 
-  // ---------------------------------------------------------------- kiosk fronts: awning, bar counter, stools, menu board
+  // ---------------------------------------------------------------- kiosk fronts: awning, serving counter, menu board
   // plain green metal awnings like the real kiosks (two shades so the ribs show)
   const AWN = [[0x3a9a86, 0x33897a]];
   ks.forEach((k, i) => {
@@ -264,15 +264,13 @@ export function buildProps(g, props) {
       const u = (j + 0.5) / stripes - 0.5;
       box(j % 2 ? cb : ca, f.x + nx * 0.55 + tx * u * w * 0.9, k.eave - 0.95, f.z + nz * 0.55 + tz * u * w * 0.9, w * 0.9 / stripes + 0.01, 0.05, 1.15, yawT, -0.5);
     }
-    // bar counter and stools
-    box(0x8a5a3c, f.x + nx * 1.4, y0 + 1.05, f.z + nz * 1.4, w * 0.7, 0.08, 0.4, yawT); // the vendor stands behind it
-    for (const u of [-0.3, 0, 0.3]) {
-      const sx = f.x + nx * 2.05 + tx * u * w, sz = f.z + nz * 2.05 + tz * u * w, sy = top(sx, sz);
-      props.add(P.cyl(8), 0xb33a2a, sx, sy + 0.72, sz, 0.36, 0.08, 0.36);
-      props.add(P.cyl(5), 0x555a60, sx, sy + 0.36, sz, 0.07, 0.72, 0.07);
-    }
+    // a solid serving counter in front of the vendor (the boardwalk in front stays clear for walkers)
+    const qx = f.x + nx * 1.45, qz = f.z + nz * 1.45, qh = 1.05;
+    box(0xcdb672, qx, y0 + qh / 2 - 0.1, qz, w * 0.7, qh + 0.2, 0.45, yawT);
+    box(0x8a5a3c, qx, y0 + qh + 0.03, qz, w * 0.7 + 0.1, 0.07, 0.55, yawT);
+    solid(qx, qz, w * 0.35, 0.23, yawT, y0 - 0.2, y0 + qh, 'counter');
     // a little menu chalkboard at the corner
-    const mx = f.x + nx * 1.5 + tx * (w / 2 + 0.3), mz = f.z + nz * 1.5 + tz * (w / 2 + 0.3);
+    const mx = f.x + nx * 1.4 + tx * (w * 0.35 + 0.45), mz = f.z + nz * 1.4 + tz * (w * 0.35 + 0.45);
     box(0x1f3a2e, mx, top(mx, mz) + 0.5, mz, 0.6, 0.95, 0.07, yawT, 0.18);
     box(0x8a5a3c, mx, top(mx, mz) + 0.99, mz, 0.66, 0.06, 0.1, yawT, 0.18);
   });

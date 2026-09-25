@@ -406,9 +406,8 @@ export function flagMesh() {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   const cloth = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8, 6, 1), new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }));
   cloth.position.set(0.62, 0.5, 0); g.add(cloth);
-  const gray = new THREE.MeshLambertMaterial({ color: 0x999999, side: THREE.DoubleSide });
-  g.userData = { cloth, tex, gray, colored: cloth.material };
-  cloth.material = gray;
+  // an untouched flag stays furled at the foot of the pole (in its colors, not gray)
+  g.userData = { cloth, tex, colored: cloth.material };
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
