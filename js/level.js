@@ -7,6 +7,7 @@ import * as M from './models.js';
 import { Batch, P, rng } from './geo.js';
 import { buildProps } from './props.js';
 import { buildCrowd, FOOD_LINES } from './npcs.js';
+import { buildPaseoLife } from './paseo.js';
 import { buildMothQuest } from './moth-quest.js';
 import { buildAvesQuest } from './aves-quest.js';
 
@@ -270,8 +271,7 @@ export function defineLevel(g) {
     ];
     const opts = [];
     if (!g.shop.mask) opts.push({ label: { es: `${t('shopMask')} · 100 chavos`, en: `${t('shopMask')} · 100 chavos` }, value: 'mask', primary: true });
-    if (!g.shop.shirt) opts.push({ label: { es: `${t('shopShirt')} · 40 chavos`, en: `${t('shopShirt')} · 40 chavos` }, value: 'shirt' });
-    else opts.push({ label: g.player.look === 'ponce' ? t('shopShirtOff') : t('shopShirt'), value: 'wear' });
+    opts.push({ label: t('shopWardrobe'), value: 'wardrobe', primary: g.shop.mask });
     opts.push({ label: t('bye'), value: 'bye' });
     const v = await g.ui.say('Doña Carmen', lines, opts);
     if (v === 'mask') {
@@ -279,19 +279,66 @@ export function defineLevel(g) {
       g.wallet -= 100; g.shop.mask = true; g.counters(); g.sfx.play('buy');
       const P = g.player.pos;
       g.reveal('tienda', P.x, P.y + 1.8, P.z);
-    } else if (v === 'shirt') {
-      if (g.wallet < 40) return g.ui.say('Doña Carmen', [t('cantAfford')]);
-      g.wallet -= 40; g.shop.shirt = true; g.counters(); g.sfx.play('buy');
-      g.player.setLook('ponce');
-      g.save();
-      await g.ui.say('Doña Carmen', [{ es: '¡Rojo y negro, los colores de Ponce! ¡Te queda brutal!', en: "Red and black, Ponce's colors! Looks great on you!" }]);
-    } else if (v === 'wear') {
-      g.player.setLook(g.player.look === 'ponce' ? 'default' : 'ponce');
-      g.save();
-    }
+    } else if (v === 'wardrobe') await wardrobe(g);
   });
 
-  carmen.quest = g => (!g.shop.mask && g.wallet >= 100 ? 'shop' : null);
+  // Doña Carmen's wardrobe: outfits and the golden pava, bought once with chavos and worn any time
+  const OUTFITS = [
+    { id: 'default', price: 0, name: { es: 'Guayabera blanca', en: 'White guayabera' } },
+    { id: 'ponce', price: 40, name: { es: 'Camisa de Ponce (roja y negra)', en: 'Ponce shirt (red & black)' },
+      line: { es: '¡Rojo y negro, los colores de Ponce! ¡Te queda brutal!', en: "Red and black, Ponce's colors! Looks great on you!" } },
+    { id: 'pescador', price: 30, name: { es: 'Camisa de pescador', en: 'Fisherman shirt' },
+      line: { es: '¡Ahora sí pareces de los que pescan en el muelle!', en: 'Now you look like one of the pier fishermen!' } },
+    { id: 'playa', price: 30, name: { es: 'Ropa de playa', en: 'Beach clothes' },
+      line: { es: '¡Listo pa’ la playa! No te olvides del bloqueador.', en: 'Ready for the beach! Don’t forget the sunscreen.' } },
+    { id: 'bandera', price: 60, name: { es: 'Camiseta boricua', en: 'Boricua tee' },
+      line: { es: '¡Azul como el triángulo de la bandera! ¡Wepa!', en: 'Blue like the flag’s triangle! Wepa!' } },
+    { id: 'vejigante', price: 80, name: { es: 'Traje de vejigante', en: 'Vejigante outfit' },
+      line: { es: '¡Amarillo y rojo, como los vejigantes del carnaval de Ponce!', en: 'Yellow and red, like the vejigantes at the Ponce carnival!' } },
+  ];
+  const GOLD_HAT = 120;
+  async function wardrobe(g) {
+    const own = g.shop.outfits ??= {};
+    const opts = OUTFITS.map(o => {
+      const has = o.price === 0 || own[o.id];
+      const wearing = g.player.look === o.id;
+      return { label: wearing ? { es: `✓ ${o.name.es}`, en: `✓ ${o.name.en}` } : has ? o.name : { es: `${o.name.es} · ${o.price} chavos`, en: `${o.name.en} · ${o.price} chavos` },
+        value: o.id, disabled: wearing };
+    });
+    const gold = g.player.hatStyle === 'gold';
+    opts.push({ label: g.shop.goldHat ? (gold ? { es: 'Pava de paja', en: 'Straw pava' } : { es: 'Pava dorada', en: 'Golden pava' })
+      : { es: `Pava dorada · ${GOLD_HAT} chavos`, en: `Golden pava · ${GOLD_HAT} chavos` }, value: 'hat', primary: !g.shop.goldHat });
+    opts.push({ label: t('bye'), value: 'bye' });
+    const v = await g.ui.say('Doña Carmen', [{ es: `¿Qué te quieres probar? Tienes ${g.wallet} chavos.`, en: `What do you want to try on? You have ${g.wallet} chavos.` }], opts);
+    if (v === 'hat') {
+      if (!g.shop.goldHat) {
+        if (g.wallet < GOLD_HAT) return g.ui.say('Doña Carmen', [{ es: `${t('cantAfford')} Te faltan ${GOLD_HAT - g.wallet}.`, en: `${t('cantAfford')} You need ${GOLD_HAT - g.wallet} more.` }]);
+        g.wallet -= GOLD_HAT; g.shop.goldHat = true; g.counters(); g.sfx.play('buy');
+        g.player.setHat('gold'); g.save();
+        return g.ui.say('Doña Carmen', [{ es: '¡Una pava de oro! Brilla más que el sol de Ponce.', en: 'A golden pava! It shines brighter than the Ponce sun.' }]);
+      }
+      g.player.setHat(gold ? 'straw' : 'gold'); g.save();
+      return;
+    }
+    const o = OUTFITS.find(q => q.id === v);
+    if (!o) return;
+    if (o.price && !own[o.id]) {
+      if (g.wallet < o.price) return g.ui.say('Doña Carmen', [{ es: `${t('cantAfford')} Te faltan ${o.price - g.wallet}.`, en: `${t('cantAfford')} You need ${o.price - g.wallet} more.` }]);
+      g.wallet -= o.price; own[o.id] = true; g.counters(); g.sfx.play('buy');
+      g.player.setLook(o.id); g.save();
+      if (o.line) await g.ui.say('Doña Carmen', [o.line]);
+      return;
+    }
+    g.player.setLook(o.id); g.save();
+  }
+
+  // "$" over Doña Carmen whenever you can afford something new
+  carmen.quest = g => {
+    if (!g.shop.mask) return g.wallet >= 100 ? 'shop' : null;
+    const own = g.shop.outfits || {};
+    const next = [...OUTFITS.filter(o => o.price && !own[o.id]).map(o => o.price), ...(g.shop.goldHat ? [] : [GOLD_HAT])];
+    return next.length && g.wallet >= Math.min(...next) ? 'shop' : null;
+  };
 
   // ---------------------------------------------------------------- guide at the entrance
   const tomas = g.npc('guia', 'Don Tomás', ent.x + Math.cos(entFace) * 2.2, ent.z - Math.sin(entFace) * 2.2, entFace + Math.PI, async (g) => {
@@ -737,11 +784,26 @@ export function defineLevel(g) {
     const [x, z] = L(110 + i * 16, -178 + i * 6.2);
     g.coin(x, Math.max(H(x, z), 0) + 0.8 + Math.sin(i / 17 * Math.PI) * 1.6, z);
   }
-  // parking lot lines
-  for (const lot of data.world.parking.slice(0, 4)) {
+  // car-roof hops: a chavo over each roof in a cluster of parked cars in the two big lots
+  const carRoofs = phys.cols.filter(c => c.tag === 'car' && c.y1 - c.y0 < 0.6);
+  for (const lot of data.world.parking.slice(0, 2)) {
     const pts = lot.map(([x, y]) => L(x, y));
     const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cz = pts.reduce((a, p) => a + p[1], 0) / pts.length;
-    for (let k = -3; k <= 3; k++) { const x = cx + k * 2, z = cz; g.coin(x, top(x, z) + 0.7, z); }
+    const mid = c => [(c.minx + c.maxx) / 2, (c.minz + c.maxz) / 2];
+    const first = carRoofs.slice().sort((a, b) => dist2(...mid(a), cx, cz) - dist2(...mid(b), cx, cz))[0];
+    if (!first) continue;
+    const [fx, fz] = mid(first);
+    for (const c of carRoofs.filter(c => dist2(...mid(c), fx, fz) < 14).slice(0, 8)) { const [x, z] = mid(c); g.coin(x, c.y1 + 0.7, z); }
+  }
+  // walk the park wall: chavos along two stretches of its top
+  const walls = phys.cols.filter(c => c.tag === 'wall');
+  for (const start of [Math.floor(walls.length * 0.2), Math.floor(walls.length * 0.65)]) {
+    for (const c of walls.slice(start, start + 10)) g.coin((c.minx + c.maxx) / 2, c.y1 + 0.6, (c.minz + c.maxz) / 2);
+  }
+  // a ring on the brick plaza at the boardwalk's north end
+  {
+    const n = along(fromNorth(0), -6);
+    g.coinRing(n.x, top(n.x, n.z) + 0.7, n.z, 3, 10);
   }
   // tree-top trail near the south roundabout (one-way canopies)
   const canopyTrail = info.trees.filter(q => q[2] === 'tree' && dist2(q[0], q[1], srnx, srnz) < 20).slice(0, 5);
@@ -984,6 +1046,12 @@ export function defineLevel(g) {
 
   buildProps(g, props);
   buildCrowd(g, along, fromNorth, total);
+  buildPaseoLife(g);
+  // no chavo stays buried in something solid: lift it on top
+  for (const c of g.coins) {
+    const hit = phys.near(c.x, c.z, 0.3).filter(k => k.solid && c.y > k.y0 && c.y - 0.3 < k.y1 && phys.sdist(k, c.x, c.z).inside);
+    if (hit.length) c.y = Math.max(...hit.map(k => k.y1)) + 0.7;
+  }
 
   const pm = props.build(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   scene.add(pm);

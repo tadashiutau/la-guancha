@@ -14,9 +14,11 @@ function part(geo, mat, x, y, z, parent) {
   return m;
 }
 
-export function makeHat() {
+export function makeHat(style = 'straw') {
   const g = new THREE.Group();
-  const straw = lam(0xe9cf86), band = lam(0x9b3b2a);
+  const gold = style === 'gold';
+  const straw = gold ? new THREE.MeshPhongMaterial({ color: 0xe8b830, specular: 0xfff0b0, shininess: 60 }) : lam(0xe9cf86);
+  const band = lam(gold ? 0x2f6fcf : 0x9b3b2a);
   part(new THREE.CylinderGeometry(0.4, 0.42, 0.04, 16), straw, 0, 0, 0, g);
   part(new THREE.CylinderGeometry(0.16, 0.2, 0.2, 12), straw, 0, 0.11, 0, g);
   part(new THREE.CylinderGeometry(0.201, 0.201, 0.05, 12), band, 0, 0.04, 0, g);
@@ -70,6 +72,11 @@ export function makeModel(look) {
 export const LOOKS = {
   default: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xfbfaf4, shorts: 0xc9b48a },
   ponce: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xd12b2b, shorts: 0x1d1d1d },
+  // outfits from Doña Carmen's wardrobe
+  playa: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0x3fb8b0, shorts: 0xf2a93b },
+  pescador: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xb8a878, shorts: 0x2f3f5f },
+  bandera: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0x2f6fcf, shorts: 0xf4f2ec },
+  vejigante: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xf7c948, shorts: 0xd8262f },
 };
 
 export class Player {
@@ -93,6 +100,7 @@ export class Player {
     this.look = 'default';
     this.m = makeModel(LOOKS.default);
     scene.add(this.m.root);
+    this.hatStyle = 'straw';
     this.hatMesh = makeHat();
     this.m.hatSlot.add(this.hatMesh);
     this.hat = { state: 'on', pos: new THREE.Vector3(), vel: new THREE.Vector3(), t: 0, spin: 0 };
@@ -113,6 +121,17 @@ export class Player {
     this.scene.add(this.m.root);
     if (this.hat.state === 'on') this.m.hatSlot.add(hat);
     this.look = name;
+  }
+
+  // swap the pava (straw or the golden one from the shop), wherever it is right now
+  setHat(style) {
+    const old = this.hatMesh;
+    this.hatMesh = makeHat(style);
+    this.hatMesh.position.copy(old.position);
+    this.hatMesh.rotation.copy(old.rotation);
+    old.parent?.add(this.hatMesh);
+    old.parent?.remove(old);
+    this.hatStyle = style;
   }
 
   teleport(x, y, z, face = this.face) {

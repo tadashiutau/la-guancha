@@ -154,7 +154,7 @@ ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); g
 
 // ------------------------------------------------------------------ loop
 const clock = new THREE.Clock();
-let fpsT = 0, fpsN = 0;
+let fpsT = performance.now(), fpsN = 0;
 function frame() {
   requestAnimationFrame(frame);
   if (!game) return;
@@ -213,8 +213,10 @@ function frame() {
   renderer.render(scene, camera);
   ui.frame(dt, player, cam);
   if (DEBUG) {
-    fpsN++; fpsT += dt;
-    if (fpsT > 1) { ui.debug(`${Math.round(fpsN / fpsT)} fps · ${renderer.info.render.calls} calls · ${(renderer.info.render.triangles / 1000) | 0}k tris · ${freecam.on ? 'freecam ' + camera.position.toArray().map(v => v.toFixed(1)).join(',') : player.state} · ${P.x.toFixed(1)},${P.y.toFixed(1)},${P.z.toFixed(1)} (${(P.x / 0.6).toFixed(0)},${(-P.z / 0.6).toFixed(0)})`); fpsN = fpsT = 0; }
+    fpsN++;
+    // wall-clock time: dt is capped at 1/20 s, which would hide frame rates under 20
+    const fpsDt = (performance.now() - fpsT) / 1000;
+    if (fpsDt > 1) { ui.debug(`${Math.round(fpsN / fpsDt)} fps · ${renderer.info.render.calls} calls · ${(renderer.info.render.triangles / 1000) | 0}k tris · ${freecam.on ? 'freecam ' + camera.position.toArray().map(v => v.toFixed(1)).join(',') : player.state} · ${P.x.toFixed(1)},${P.y.toFixed(1)},${P.z.toFixed(1)} (${(P.x / 0.6).toFixed(0)},${(-P.z / 0.6).toFixed(0)})`); fpsN = 0; fpsT = performance.now(); }
   }
 }
 

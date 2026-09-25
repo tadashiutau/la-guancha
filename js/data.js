@@ -27,6 +27,9 @@ export async function loadData(onProgress = () => {}) {
     loadImage('data/canopy.png').catch(() => null),
   ]);
   onProgress(0.3);
+  // Paseo Tablado La Guancha, the street behind the kiosks, is closed to cars: it's a pedestrian
+  // promenade (benches, planters, kids on bikes), drawn and furnished by paseo.js
+  for (const r of world.roads) if (Math.hypot(r.p[0][0] + 14.4, r.p[0][1] + 135.5) < 1 && Math.hypot(r.p[1][0] + 235, r.p[1][1] - 167.6) < 1) r.paseo = true;
   const f = world.frame;
   const hp = pixels(himg);
   const gw = himg.width, gh = himg.height;

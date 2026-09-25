@@ -103,7 +103,7 @@ export function randomLook(R, opts = {}) {
   return {
     skin: pick(SKINS), hair: pick(HAIRS), shirt: pick(SHIRTS), bottom: pick(BOTTOMS), dress,
     hat: opts.hat ?? (R() < 0.18 ? 'pava' : R() < 0.35 ? 'cap' : 'none'), hatColor: pick(SHIRTS),
-    stache: !dress && R() < 0.3, scale: opts.scale ?? (0.92 + R() * 0.14),
+    stache: !dress && R() < 0.3 && !(opts.scale < 0.8), scale: opts.scale ?? (0.92 + R() * 0.14),
   };
 }
 

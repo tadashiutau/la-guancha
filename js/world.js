@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { S } from './data.js';
 import { Batch, P, prismTris, hipRoofTris, polyArea, rng, prim } from './geo.js';
 import { buildFoliage } from './foliage.js';
+import { buildPaseoStreet, paseoFrame, PASEO_W } from './paseo.js';
 
 const C = {
   // colors from photos of the real boardwalk: cream-yellow railings, lavender kiosks with white
@@ -167,6 +168,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
       info.kiosks.push({ x: cx, z: cz, hx, hz, yaw: rang, base, eave, top: eave + Math.min(Math.min(hx, hz) * slope, cap), dTab });
       return;
     }
+    if (Math.hypot(rcx + 122.4, rcy + 27.3) < 2) { buildGateway(cx, cz, hx, hz, rang, base); return; }
     const h = Math.max(b.h * S, 2.2);
     const wall = area > 1500 ? 0xe9e4d8 : [0xf3e7c9, 0xe8d7b0, 0xf0d4c0, 0xdfe7ea][Math.floor(R() * 4)];
     const top = base + h;
@@ -186,6 +188,50 @@ export function buildWorld(scene, data, phys, { mobile }) {
     }
   }
 
+  // The long building behind the middle kiosks: cream walls with green trim and roofs, and the
+  // entrance pavilion (raised roof, red-capped lantern, open archway) facing the paseo, as in
+  // Street View
+  function buildGateway(cx, cz, hx, hz, yaw, base) {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const at = (u, v) => [cx + u * c + v * s, cz - u * s + v * c];
+    // which long side faces land (the paseo)?
+    const side = H(...at(0, hz + 6)) > H(...at(0, -hz - 6)) ? 1 : -1;
+    const eave = base + 3.3;
+    const cream = 0xefe4c4, green = 0x2f6b4a, roof = 0x3a8f6e;
+    const rect = rectPts(cx, cz, hx, hz, yaw);
+    batch.addTris(prismTris(rect, base - 0.3, eave, false), cream);
+    batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz + 0.03, yaw), base - 0.3, base + 0.4, false), 0xcdbf9c);
+    batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, yaw), eave - 0.3, eave, false), green);
+    batch.addTris(prismTris(rectPts(cx, cz, hx + 0.02, hz * 0.8, yaw), base + 0.9, base + 1.9, false), C.window);
+    batch.addTris(hipRoofTris(cx, cz, hx, hz, yaw, eave, 0.45, 2, 0.6), roof);
+    phys.add(rectPts(cx, cz, hx + 0.6, hz + 0.6, yaw), eave - 0.3, eave, { roof: 0.45, cap: 2, tag: 'roof' });
+    phys.add(rect, base - 0.3, eave - 0.3, { tag: 'bld' });
+    // green pilasters along the walls
+    for (let u = -hx + 1.5; u <= hx - 1.4; u += 3.2)
+      for (const v of [-1, 1]) { const [x, z] = at(u, v * (hz + 0.06)); batch.add(P.box(), green, x, (base + eave) / 2, z, 0.35, eave - base, 0.12, yaw); }
+    // entrance pavilion: a taller block pushed out toward the paseo
+    const gw = 3.6, gd = 2.4, gTop = base + 5.4;
+    const [gx, gz] = at(0, side * (hz + gd / 2 - 0.4));
+    batch.addTris(prismTris(rectPts(gx, gz, gw, gd / 2, yaw), base - 0.3, gTop, false), cream);
+    batch.addTris(prismTris(rectPts(gx, gz, gw + 0.04, gd / 2 + 0.04, yaw), gTop - 0.35, gTop, false), green);
+    batch.addTris(prismTris(rectPts(gx, gz, gw + 0.04, gd / 2 + 0.04, yaw), eave - 0.3, eave, false), green);
+    // the open archway (dark) with a green frame, and a row of little windows above
+    const [fx, fz] = at(0, side * (hz + gd - 0.4 + 0.03));
+    batch.add(P.box(), 0x2a2a28, fx, base + 1.4, fz, 3.2, 2.8, 0.08, yaw);
+    batch.add(P.box(), green, fx, base + 2.9, fz, 3.6, 0.25, 0.12, yaw);
+    for (const u of [-1.7, 1.7]) { const [x, z] = at(u, side * (hz + gd - 0.4 + 0.05)); batch.add(P.box(), green, x, base + 1.4, z, 0.3, 2.9, 0.14, yaw); }
+    for (let k = -3; k <= 3; k++) { const [x, z] = at(k * 0.9, side * (hz + gd - 0.4 + 0.03)); batch.add(P.box(), 0x3d5a6a, x, gTop - 1.0, z, 0.5, 0.5, 0.06, yaw); }
+    batch.addTris(hipRoofTris(gx, gz, gw, gd / 2, yaw, gTop, 0.5, 1.6, 0.5), roof);
+    phys.add(rectPts(gx, gz, gw + 0.5, gd / 2 + 0.5, yaw), gTop - 0.3, gTop, { roof: 0.5, cap: 1.6, tag: 'roof' });
+    phys.add(rectPts(gx, gz, gw, gd / 2, yaw), base - 0.3, gTop - 0.3, { tag: 'bld' });
+    // the lantern on top with its red cap
+    const lt = gTop + 0.6;
+    batch.add(P.box(), cream, gx, lt + 0.4, gz, 1.4, 1.0, 1.4, yaw);
+    batch.add(P.box(), green, gx, lt + 0.4, gz, 1.45, 0.25, 1.45, yaw);
+    batch.addTris(hipRoofTris(gx, gz, 0.7, 0.7, yaw, lt + 0.9, 0.6, 1, 0.2), 0xb8453a);
+    info.gateway = { x: fx, z: fz, yaw, nx: side * s, nz: side * c, base };
+  }
+
   function rectPts(cx, cz, hx, hz, yaw) {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     return [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]].map(([x, z]) => [cx + x * c + z * s, cz - x * s + z * c]);
@@ -202,7 +248,13 @@ export function buildWorld(scene, data, phys, { mobile }) {
     const tx = tb[0][0], tz = tb[0][1];
     const a0 = Math.atan2(tz - cz, tx - cx);
     // core
-    batch.add(P.box(), C.towerCore, cx, (base + topY) / 2 - 0.2, cz, 3.2, topY - base, 3.2);
+    // the core is painted as the Puerto Rican flag, hung vertically: the blue triangle at the top
+    // and the stripes running down (repainted this way in the 2020s)
+    const core = new THREE.Mesh(new THREE.BoxGeometry(3.2, topY - base, 3.2), [0, 1, 2, 3, 4, 5].map(i =>
+      i === 2 || i === 3 ? new THREE.MeshLambertMaterial({ color: C.towerCore }) : new THREE.MeshLambertMaterial({ map: flagTexture(3.2 / (topY - base)) })));
+    core.position.set(cx, (base + topY) / 2 - 0.2, cz);
+    core.castShadow = core.receiveShadow = true;
+    scene.add(core);
     phys.addBox(cx, cz, 1.6, 1.6, 0, base - 1, topY - 0.35, { tag: 'towercore' });
     // square spiral: map an angle to a point on a square of "radius" r
     const sq = (a, r) => {
@@ -628,6 +680,9 @@ export function buildWorld(scene, data, phys, { mobile }) {
     return out;
   }
 
+  // ---------------------------------------------------------------- the paseo (closed street behind the kiosks)
+  buildPaseoStreet({ data, batch, phys, H, info, palm, broadTree, bush });
+
   // ---------------------------------------------------------------- parked cars
   // Cars park in stall rows along each lot's aisles (the service roads inside the lot), nose
   // or tail to the aisle, with white stall lines painted between spaces. Most spaces are empty,
@@ -823,6 +878,32 @@ function lamp(batch, x, y, z, yaw) {
   batch.add(P.cone(4), C.lamp, x, y + H3 + 0.15, z, 0.34, 0.3, 0.34, yaw + Math.PI / 4);
 }
 
+// Puerto Rican flag hung vertically on a face of the given width/height ratio
+function flagTexture(aspect) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = Math.round(256 / aspect);
+  const g = c.getContext('2d'), w = c.width, h = c.height;
+  // stripes run the length of the face; the flag is 5 stripes across
+  for (let i = 0; i < 5; i++) { g.fillStyle = i % 2 ? '#f4f2ec' : '#d8262f'; g.fillRect(i * w / 5, 0, w / 5 + 1, h); }
+  // the triangle's base spans the top edge, its point hangs down
+  const th = w * 0.866;
+  g.fillStyle = '#2f6fcf';
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(w, 0); g.lineTo(w / 2, th); g.closePath(); g.fill();
+  // five-pointed star, upright as painted on the tower
+  const sx = w / 2, sy = th * 0.36, R1 = w * 0.13, R2 = R1 * 0.4;
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? R2 : R1;
+    g.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
+  }
+  g.closePath(); g.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 function frondGeo() {
   return prim('frond', () => {
     // a drooping leaf along +x
@@ -994,7 +1075,31 @@ function groundMap(data) {
 // Roads and footpaths are terrain-following ribbons with real geometry, so their edges stay sharp.
 function buildRoutes(scene, data) {
   const H = data.terrainH;
-  const roads = data.world.roads.map(r => ({ pts: wpts(r.p), width: r.w * S }));
+  // roads that run into the paseo stop at its edge (bollards close them off)
+  const F = paseoFrame(data);
+  const clip = pts => {
+    if (!F) return pts;
+    const inside = ([x, z]) => { const p = F.project(x, z); return p.d < F.half + 0.2 && p.t > 3 && p.t < F.len - 3; };
+    const out = pts.slice();
+    for (const [i, j] of [[0, 1], [out.length - 1, out.length - 2]]) {
+      if (out.length < 2 || !inside(out[i]) || inside(out[j])) continue;
+      let a = 0, b = 1; // fraction from out[i] toward out[j]
+      for (let k = 0; k < 20; k++) {
+        const m = (a + b) / 2, q = [out[i][0] + (out[j][0] - out[i][0]) * m, out[i][1] + (out[j][1] - out[i][1]) * m];
+        if (inside(q)) a = m; else b = m;
+      }
+      out[i] = [out[i][0] + (out[j][0] - out[i][0]) * b, out[i][1] + (out[j][1] - out[i][1]) * b];
+      (out.cut ??= new Set()).add(i); // square end, no round cap onto the paseo
+    }
+    return out;
+  };
+  const roads = data.world.roads.filter(r => !r.paseo).map(r => ({ pts: clip(wpts(r.p)), width: r.w * S }));
+  // the paseo starts square at the roundabout's edge rather than spilling across the ring
+  const paseo = data.world.roads.filter(r => r.paseo).map(r => {
+    const pts = wpts(r.p);
+    if (F) { pts[0] = F.at(4, 0); pts.cut = new Set([0]); }
+    return { pts, width: PASEO_W * S };
+  });
   const paths = data.world.footways.map(p => ({ pts: wpts(p), width: 2.4 * S }));
   const add = (routes, extra, lift, color) => {
     const vertices = [];
@@ -1018,7 +1123,8 @@ function buildRoutes(scene, data) {
         }
       }
       // Rounded joins cover the seams between separately sampled road segments.
-      for (const [x, z] of pts) {
+      for (const [i, [x, z]] of pts.entries()) {
+        if (pts.cut?.has(i)) continue;
         const mid = point(x, z);
         for (let j = 0; j < 12; j++) {
           const a = j / 12 * Math.PI * 2, b = (j + 1) / 12 * Math.PI * 2;
@@ -1040,10 +1146,13 @@ function buildRoutes(scene, data) {
   add(paths, 0, 0.05, 0xd8b895);
   add(roads, 0.65 * S, 0.06, 0xc9c4b6);
   add(roads, 0, 0.09, 0x656c72);
+  // the paseo: pale brushed concrete with a darker border band (no asphalt, no lane lines)
+  add(paseo, 0.5 * S, 0.07, 0xb3ab9d);
+  add(paseo, 0, 0.1, 0xd9d3c6);
 
   // road markings: dashed white center lines on the regular two-way roads, a double yellow
   // center line and white edge lines on the main road (parking aisles get stall lines instead)
-  const lines = { white: [], yellow: [] };
+  const lines = { white: [], yellow: [], joint: [] };
   // a solid line follows the road with mitered corners, so it bends without gaps
   const solidLine = (raw, off, w, out, keep = () => true) => {
     // extra points along long straights so the line follows the ground like the road does
@@ -1091,17 +1200,27 @@ function buildRoutes(scene, data) {
       carry = (len + carry) % (dash + gap);
     }
   };
-  const roadPts = data.world.roads.map(r => ({ r, pts: wpts(r.p), hw: r.w * S / 2 }));
+  // scored joints across the paseo slabs every 3 m, and two lengthwise ones
+  for (const { pts, width } of paseo) {
+    for (const o of [-width / 6, width / 6]) solidLine(pts, o, 0.05, lines.joint);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+      for (let d = 1.8; d < len; d += 3 * S) stripe([[ax + ux * d - uz * width / 2, az + uz * d + ux * width / 2], [ax + ux * d + uz * width / 2, az + uz * d - ux * width / 2]], 0, 0.05, 1e3, 0, lines.joint);
+    }
+  }
+  const roadPts = data.world.roads.filter(r => !r.paseo).map(r => ({ r, pts: wpts(r.p), hw: r.w * S / 2 }));
   // edge lines stop where another road joins
   const clearOfOthers = self => (x, z) => !roadPts.some(o => o.r !== self && o.pts.some((q, i) => i && segDist(x, z, ...o.pts[i - 1], ...q) < o.hw + 0.4));
   for (const r of data.world.roads) {
-    const pts = wpts(r.p), hw = r.w * S / 2;
+    if (r.paseo) continue;
+    const pts = clip(wpts(r.p)), hw = r.w * S / 2;
     if (r.w >= 11) {
       for (const o of [-0.1, 0.1]) stripe(pts, o, 0.07, 1e9, 0, lines.yellow);
       for (const o of [-(hw - 0.3), hw - 0.3]) solidLine(pts, o, 0.1, lines.white, clearOfOthers(r));
     } else if (r.w >= 8) stripe(pts, 0, 0.12, 1.3, 1.5, lines.white);
   }
-  for (const [key, color] of [['white', 0xf2f2ee], ['yellow', 0xf2c230]]) {
+  for (const [key, color] of [['white', 0xf2f2ee], ['yellow', 0xf2c230], ['joint', 0xa9a295]]) {
     if (!lines[key].length) continue;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(lines[key], 3));

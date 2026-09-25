@@ -107,6 +107,7 @@ export class Sfx {
     if (now - (this.lastVoiceAt ?? -1) < 0.055) return;
     this.lastVoiceAt = now;
     const name = String(who || '');
+    if (name === 'Placa' || name === 'Plaque') return; // signs don't talk
     let seed = 0;
     for (const letter of name) seed = (seed * 31 + letter.codePointAt(0)) | 0;
     const base = VOICE_PITCH[name] ?? 210 + (Math.abs(seed) % 9) * 28;

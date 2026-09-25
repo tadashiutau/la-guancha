@@ -70,6 +70,8 @@ For a ground-level visual pass, see the [coordinate-tagged La Guancha Street Vie
 - **NOAA NCEI CUDEM** 2022 topobathy: real water depths for the basin (about 9 m deep), reef flat and open sea
 - **NAIP 2022** and **Esri World Imagery**: aerial ground outside mapped areas, mini-map reference, roof colors and moored-boat detection. Roads, footpaths, parks, beach, wetlands and parking use crisp game surfaces over the imagery.
 
+The street behind the kiosks, Paseo Tablado La Guancha, is closed to cars in real life, so `js/paseo.js` paves it as a promenade: bollards, planters, tree wells, benches, shade canopies, pergolas, the Héctor Lavoe statue, and kids riding bikes and scooters.
+
 Rebuilding the data:
 
 ```bash

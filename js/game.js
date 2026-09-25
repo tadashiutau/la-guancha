@@ -8,7 +8,8 @@ import { readSave, writeSave } from './saves.js';
 
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-const posKey = o => `${Math.round(o.x)}:${Math.round(o.y)}:${Math.round(o.z)}`;
+// o.key disambiguates coins that round to the same spot (the nth one there gets '#n')
+const posKey = o => o.key || `${Math.round(o.x)}:${Math.round(o.y)}:${Math.round(o.z)}`;
 
 class Particles {
   constructor(scene, n = 500) {
@@ -99,7 +100,14 @@ export class Game {
   W(x, y) { return [x * S, -y * S]; }
   top(X, Z) { return this.phys.topMost(X, Z); }
 
-  coin(x, y, z) { this.coins.push({ x, y, z, alive: true, id: this.coins.length }); }
+  coin(x, y, z) {
+    const c = { x, y, z, alive: true, id: this.coins.length }, k = posKey(c);
+    this.coinKeys ??= new Map();
+    const n = this.coinKeys.get(k) || 0;
+    this.coinKeys.set(k, n + 1);
+    if (n) c.key = k + '#' + n;
+    this.coins.push(c);
+  }
   coinLine(ax, ay, az, bx, by, bz, n) {
     for (let i = 0; i < n; i++) { const f = n === 1 ? 0 : i / (n - 1); this.coin(ax + (bx - ax) * f, ay + (by - ay) * f, az + (bz - az) * f); }
   }
@@ -393,7 +401,7 @@ export class Game {
       flags: this.flags.filter(f => f.on).map(f => f.id),
       crates: keys(this.crates.filter(c => c.broken)),
       spots: keys(this.spots.filter(c => c.used)),
-      q: this.q, rv: this.revealed, shop: this.shop, look: this.player.look, time: Math.round(this.playTime),
+      q: this.q, rv: this.revealed, shop: this.shop, look: this.player.look, hat: this.player.hatStyle, time: Math.round(this.playTime),
       last: this.lastFlag, name: this.playerName,
     };
     writeSave(this.slot, s);
@@ -427,6 +435,8 @@ export class Game {
     for (const id of s.masks || []) { const m = this.maskById(id); if (m) { m.got = true; m.group.visible = false; } }
     for (const id of s.flags || []) { const f = this.flags.find(f => f.id === id); if (f) this.lightFlag(f, true); }
     if (s.look && s.look !== 'default') this.player.setLook(s.look);
+    if (s.hat === 'gold') this.player.setHat('gold');
+    if (this.shop.shirt) (this.shop.outfits ??= {}).ponce = true; // older saves bought the Ponce shirt
     for (const c of this.challenges) c.onLoad?.();
     this.loading = false;
     this.refreshAll();
@@ -547,7 +557,7 @@ export class Game {
     const P = this.player.pos;
     this.player.face = Math.atan2(n.x - P.x, n.z - P.z);
     this.player.vel.set(0, 0, 0);
-    n.m.root.rotation.y = Math.atan2(P.x - n.x, P.z - n.z);
+    if (!n.fixed) n.m.root.rotation.y = Math.atan2(P.x - n.x, P.z - n.z);
     try { await n.talk(this, n); } finally { this.talking = false; }
   }
 
