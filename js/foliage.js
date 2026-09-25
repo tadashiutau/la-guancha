@@ -12,15 +12,22 @@ export function buildFoliage(scene, trees, palmFrond) {
     if (!chunks.has(key)) chunks.set(key, []);
     chunks.get(key).push({ tree, piece });
   }
-  // alpha hashing fades without transparency sorting, so overlapping canopies still draw in depth order
-  const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, alphaHash: true });
+  // Fading uses an ordered 4x4 screen-door pattern (like Mario Odyssey) instead of real
+  // transparency: no sorting problems between overlapping canopies, and an even, clean look.
+  const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
   mat.onBeforeCompile = shader => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float instanceOpacity; varying float vFoliageOpacity;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFoliageOpacity = instanceOpacity;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vFoliageOpacity;')
-      .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= vFoliageOpacity;');
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        if (vFoliageOpacity < 0.999) {
+          int bx = int(mod(gl_FragCoord.x, 4.0)), by = int(mod(gl_FragCoord.y, 4.0));
+          int idx = bx + by * 4;
+          float bayer[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
+          if (vFoliageOpacity <= (bayer[idx] + 0.5) / 16.0) discard;
+        }`);
   };
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();

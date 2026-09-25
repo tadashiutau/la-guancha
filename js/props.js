@@ -269,11 +269,112 @@ export function buildProps(g, props) {
     box(0xcdb672, qx, y0 + qh / 2 - 0.1, qz, w * 0.7, qh + 0.2, 0.45, yawT);
     box(0x8a5a3c, qx, y0 + qh + 0.03, qz, w * 0.7 + 0.1, 0.07, 0.55, yawT);
     solid(qx, qz, w * 0.35, 0.23, yawT, y0 - 0.2, y0 + qh, 'counter');
+    // porch posts at the awning's outer corners, with X-braced wooden side rails back to the wall
+    const yawN = Math.atan2(-nz, nx);
+    for (const sgn of [-1, 1]) {
+      const ox = f.x + nx * 1.0 + tx * sgn * w * 0.45, oz = f.z + nz * 1.0 + tz * sgn * w * 0.45;
+      const py = top(ox, oz);
+      box(0x6b4a32, ox, (py + k.eave - 0.55) / 2, oz, 0.14, k.eave - 0.55 - py, 0.14, yawT);
+      solid(ox, oz, 0.08, 0.08, yawT, py, k.eave - 0.55, 'post');
+      const rx = f.x + nx * 0.55 + tx * sgn * w * 0.45, rz = f.z + nz * 0.55 + tz * sgn * w * 0.45;
+      box(0x7a5a3c, rx, py + 0.92, rz, 0.95, 0.08, 0.08, yawN);                  // top rail
+      for (const tilt of [0.72, -0.72]) box(0x7a5a3c, rx, py + 0.5, rz, 1.1, 0.07, 0.06, yawN, 0, tilt); // the X
+      solid(rx, rz, 0.45, 0.06, yawN, py, py + 0.95, 'rail');
+    }
     // a little menu chalkboard at the corner
     const mx = f.x + nx * 1.4 + tx * (w * 0.35 + 0.45), mz = f.z + nz * 1.4 + tz * (w * 0.35 + 0.45);
     box(0x1f3a2e, mx, top(mx, mz) + 0.5, mz, 0.6, 0.95, 0.07, yawT, 0.18);
     box(0x8a5a3c, mx, top(mx, mz) + 0.99, mz, 0.66, 0.06, 0.1, yawT, 0.18);
   });
+
+  // ---------------------------------------------------------------- low stone walls around the park
+  // like the real park: a knee-high stone wall along its edge, open wherever a path or road enters
+  const foot = data.world.footways.map(p => p.map(([x, y]) => L(x, y)));
+  const cross = (a, b2, c2, d) => {
+    const o = (p, q, r2) => Math.sign((q[0] - p[0]) * (r2[1] - p[1]) - (q[1] - p[1]) * (r2[0] - p[0]));
+    return o(a, b2, c2) !== o(a, b2, d) && o(c2, d, a) !== o(c2, d, b2);
+  };
+  const lanes = [...foot, ...roads.map(r => r.p)];
+  const inside = (x, z, pts) => {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, zi] = pts[i], [xj, zj] = pts[j];
+      if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+    }
+    return c;
+  };
+  for (const park of data.world.park) {
+    const pts = park.map(([x, y]) => L(x, y));
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 0.5) continue;
+      // sit the wall just inside the park, off the sidewalk
+      let nx = -(bz - az) / len, nz = (bx - ax) / len;
+      if (!inside((ax + bx) / 2 + nx, (az + bz) / 2 + nz, pts)) { nx = -nx; nz = -nz; }
+      const n = Math.max(1, Math.round(len / 1.6)), yaw = Math.atan2(-(bz - az), bx - ax);
+      for (let k = 0; k < n; k++) {
+        const t0 = k / n, t1 = (k + 1) / n;
+        const p0 = [ax + (bx - ax) * t0 + nx * 0.7, az + (bz - az) * t0 + nz * 0.7];
+        const p1 = [ax + (bx - ax) * t1 + nx * 0.7, az + (bz - az) * t1 + nz * 0.7];
+        const x = (p0[0] + p1[0]) / 2, z = (p0[1] + p1[1]) / 2;
+        // a gap wherever a path or road comes in (and a little either side of it)
+        const ext = [[p0[0] - (bx - ax) / len * 1.2, p0[1] - (bz - az) / len * 1.2], [p1[0] + (bx - ax) / len * 1.2, p1[1] + (bz - az) / len * 1.2]];
+        if (lanes.some(l => l.some((q, j) => j && cross(ext[0], ext[1], l[j - 1], q)))) continue;
+        if (nearRoad(x, z, -0.7)) continue;
+        if (phys.near(x, z, 0.8).some(c => c.solid && c.tag !== 'deck' && phys.sdist(c, x, z).d < 0.4)) continue;
+        const y = H(x, z);
+        if (y < 0.3) continue;
+        box(0xd2c8b4, x, y + 0.27, z, len / n + 0.02, 0.54, 0.4, yaw);
+        box(0xe4ddcf, x, y + 0.57, z, len / n + 0.06, 0.07, 0.48, yaw);
+        solid(x, z, len / n / 2, 0.2, yaw, y - 0.2, y + 0.6, 'wall');
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- tower plaza
+  // big dark-green pergolas on stone footings, picnic tables, and the turquoise building with
+  // red doors at the foot of the tower (as in Street View)
+  const tw = info.tower;
+  if (tw) {
+    const pergola = (x, z, yaw, hx, hz) => {
+      const y = H(x, z);
+      const nx2 = Math.max(2, Math.round(hx / 1.6)), nz2 = Math.max(2, Math.round(hz / 1.6));
+      for (let i = 0; i <= nx2; i++) for (let j = 0; j <= nz2; j++) {
+        if (i && j && i < nx2 && j < nz2) continue; // posts only around the edge
+        const [px, pz] = rot(x, z, yaw, -hx + 2 * hx * i / nx2, -hz + 2 * hz * j / nz2);
+        box(0xb9b2a4, px, y + 0.25, pz, 0.36, 0.5, 0.36, yaw);
+        box(0x1f4a36, px, y + 1.6, pz, 0.18, 2.3, 0.18, yaw);
+        solid(px, pz, 0.12, 0.12, yaw, y, y + 2.75, 'post');
+      }
+      for (let i = 0; i <= nx2 * 2; i++) { const [px, pz] = rot(x, z, yaw, -hx + hx * i / nx2, 0); box(0x1f4a36, px, y + 2.8, pz, 0.12, 0.14, hz * 2 + 0.4, yaw); }
+      for (const v of [-hz, hz]) { const [px, pz] = rot(x, z, yaw, 0, v); box(0x1f4a36, px, y + 2.7, pz, hx * 2 + 0.4, 0.18, 0.18, yaw); }
+      phys.addBox(x, z, hx, hz, yaw, y + 2.65, y + 2.9, { tag: 'pergola' });
+    };
+    const yawT2 = R() * 0.3;
+    for (const [dx, dz] of [[7, 3], [-6, 6], [3, 9]]) {
+      const sp = freeSpot(tw.x + dx, tw.z + dz, 3.4, 12);
+      if (sp) pergola(sp[0], sp[1], yawT2, 3.0, 2.2);
+    }
+    for (let i = 0; i < 3; i++) {
+      const sp = freeSpot(tw.x + 10 + i * 3, tw.z - 4 + i * 2, 1.6, 12);
+      if (!sp) continue;
+      const [x, z] = sp, y = H(x, z), yaw = R() * 3;
+      box(0xa8744a, x, y + 0.72, z, 1.8, 0.08, 0.8, yaw);
+      for (const v of [-0.7, 0.7]) { const [px, pz] = rot(x, z, yaw, 0, v); box(0xb33a2a, px, y + 0.42, pz, 1.8, 0.07, 0.3, yaw); }
+      box(0x5a4636, x, y + 0.36, z, 0.12, 0.72, 0.12, yaw);
+      solid(x, z, 0.9, 0.45, yaw, y, y + 0.76, 'table');
+    }
+    const bs = freeSpot(tw.x - 5, tw.z - 3, 3.2, 14);
+    if (bs) {
+      const [x, z] = bs, y = H(x, z), yaw = Math.atan2(tw.x - x, tw.z - z);
+      box(0x3fb8b0, x, y + 1.3, z, 5, 2.6, 3.4, yaw);                           // turquoise walls
+      box(0xf2f0ea, x, y + 2.68, z, 5.3, 0.16, 3.7, yaw);                       // white trim roof
+      for (const u of [-0.8, 0.8]) { const [dx2, dz2] = rot(x, z, yaw, u, 1.72); box(0xc0392b, dx2, y + 0.95, dz2, 0.9, 1.9, 0.08, yaw); } // red doors
+      for (let st = 0; st < 3; st++) { const [sx, sz] = rot(x, z, yaw, 0, 1.9 + st * 0.3); box(0xc9463d, sx, y + 0.08 + st * 0.001, sz, 2.4 - st * 0.1, 0.16 - st * 0.04, 0.3, yaw); }
+      solid(x, z, 2.5, 1.7, yaw, y, y + 2.76, 'bld');
+    }
+  }
 
   // ---------------------------------------------------------------- tarima (open-air stage)
   const north = tab[0][1] < tab[tab.length - 1][1] ? tab[0] : tab[tab.length - 1];

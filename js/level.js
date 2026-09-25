@@ -757,7 +757,12 @@ export function defineLevel(g) {
   for (const [lx, ly] of [[-250, 60], [-340, -60], [-200, -120], [-380, 40], [-150, -150]]) { const [x, z] = L(lx, ly); addShell(x, H(x, z) + 0.8, z); }
   info.trees.filter((q, i) => q[2] === 'tree' && i % 97 === 5).slice(0, 5).forEach(q => addShell(q[0], q[3] + 0.8, q[1]));
   for (const bw of data.world.breakwaters.slice(0, 4)) { const [x, z] = L(bw[0][0], bw[0][1]); addShell(x, Math.max(H(x, z), 0) + 1.6, z); }
-  phys.cols.filter(c => c.tag === 'car' && c.y1 - c.y0 < 0.5).filter((c, i) => i % 23 === 7).slice(0, 4).forEach(c => addShell((c.minx + c.maxx) / 2, c.y1 + 0.7, (c.minz + c.maxz) / 2));
+  // four shells on car roofs, spread across the parked cars (always four, however many cars there are)
+  const roofs = phys.cols.filter(c => c.tag === 'car' && c.y1 - c.y0 < 0.5);
+  for (let i = 0; i < 4 && roofs.length; i++) {
+    const c = roofs[Math.floor((i + 0.5) / 4 * roofs.length)];
+    addShell((c.minx + c.maxx) / 2, c.y1 + 0.7, (c.minz + c.maxz) / 2);
+  }
   info.trees.filter(q => q[2] === 'mangrove').filter((q, i) => i % 40 === 3).slice(0, 3).forEach(q => addShell(q[0], q[3] + 0.8, q[1]));
   for (const [lx, ly] of [[60, 80], [140, 20], [110, 110], [40, 30]]) { const [x, z] = L(lx, ly); addShell(x, top(x, z) + 0.8, z); }
   addShell(tw.x + tw.rc + 1.3, tw.base + 6, tw.z);

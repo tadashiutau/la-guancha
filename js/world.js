@@ -571,7 +571,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
     batch.add(P.frustum(0.6, 6), C.trunk, x + tx / 2, (g + cy) / 2, z + tz / 2, 0.42, cy - g, 0.42, 0, tz / (cy - g), -tx / (cy - g));
     for (const a of [R() * 6.28, R() * 6.28 + 2.4]) {
       // two branches reaching into the crown
-      batch.add(P.cyl(4), C.trunk, x + Math.cos(a) * r * 0.25, cy - r * 0.35, z + Math.sin(a) * r * 0.25, 0.12, r * 0.7, 0.12,
+      batch.add(P.cyl(4), C.trunk, x + Math.cos(a) * r * 0.2, cy - r * 0.2, z + Math.sin(a) * r * 0.2, 0.11, r * 0.5, 0.11,
         0, Math.sin(a) * 0.8, -Math.cos(a) * 0.8);
     }
     const tree = { x: x + tx, y: cy, z: z + tz, radius: r * 1.15, opacity: 1, pieces: [], refs: [] };
@@ -629,41 +629,85 @@ export function buildWorld(scene, data, phys, { mobile }) {
   }
 
   // ---------------------------------------------------------------- parked cars
-  const carCols = [0xd23b3b, 0xf0f0f0, 0x2b2b2b, 0x3d6fb6, 0xc0c0c8, 0xe6b422, 0x2f8f6f, 0x8a2a4a];
-  for (const lot of W.parking) {
-    const pts = wpts(lot);
-    const area = Math.abs(polyArea(pts));
-    const n = Math.floor(area / 190); // the real lots are mostly empty
-    // car rows follow the lot's longest edge
-    let best = 0, yaw = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
-      const l = Math.hypot(bx - ax, bz - az);
-      if (l > best) { best = l; yaw = Math.atan2(-(bz - az), bx - ax); }
+  // Cars park in stall rows along each lot's aisles (the service roads inside the lot), nose
+  // or tail to the aisle, with white stall lines painted between spaces. Most spaces are empty,
+  // like the real lots on a normal day.
+  const carCols = [0xf4f4f2, 0xf4f4f2, 0xc0c0c8, 0xc0c0c8, 0x2b2b2b, 0x6a7078, 0xd23b3b, 0x3d6fb6, 0x2f5f4f, 0xd9ccb0, 0x8a2a4a];
+  const lots = W.parking.map(wpts);
+  const allRoads = W.roads.map(r => ({ p: wpts(r.p), hw: r.w * S / 2 }));
+  const distToRoad = (x, z, skip) => {
+    let best = Infinity;
+    for (const r of allRoads) {
+      if (r === skip) continue;
+      for (let i = 1; i < r.p.length; i++) best = Math.min(best, segDist(x, z, ...r.p[i - 1], ...r.p[i]) - r.hw);
     }
-    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
-    for (const [x, z] of pts) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); minz = Math.min(minz, z); maxz = Math.max(maxz, z); }
-    let placed = 0;
-    for (let k = 0; k < n * 4 && placed < n; k++) {
-      const x = minx + R() * (maxx - minx), z = minz + R() * (maxz - minz);
-      if (!inPoly(x, z, pts)) continue;
-      if (phys.near(x, z, 2.5).some(c => c.tag === 'car' || c.tag === 'trunk')) continue;
-      car(x, H(x, z), z, yaw + (R() < 0.5 ? Math.PI / 2 : -Math.PI / 2) + (R() - 0.5) * 0.1, carCols[Math.floor(R() * carCols.length)]);
-      placed++;
+    return best;
+  };
+  for (const aisle of allRoads) {
+    if (aisle.hw > 2) continue; // only service roads are aisles
+    const lot = lots.find(l => aisle.p.some(([x, z]) => inPoly(x, z, l)));
+    if (!lot) continue;
+    for (let i = 1; i < aisle.p.length; i++) {
+      const [ax, az] = aisle.p[i - 1], [bx, bz] = aisle.p[i];
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 4) continue;
+      const ux = (bx - ax) / len, uz = (bz - az) / len, nx = -uz, nz = ux;
+      const stall = 1.65, depth = 3.0, edge = aisle.hw + 0.1;
+      for (const side of [-1, 1]) {
+        for (let d = 1.5; d + 1.5 < len; d += stall) {
+          const cx = ax + ux * d + nx * side * (edge + depth / 2), cz = az + uz * d + nz * side * (edge + depth / 2);
+          if (!inPoly(cx, cz, lot) || distToRoad(cx, cz, aisle) < 1.7) continue;
+          if (phys.near(cx, cz, 1.6).some(c => c.solid && c.tag !== 'deck')) continue;
+          const g = H(cx, cz);
+          // stall line on the near side of this space
+          const lx = cx - ux * stall / 2, lz = cz - uz * stall / 2;
+          batch.add(P.box(), 0xf2f2ee, lx, g + 0.1, lz, depth, 0.02, 0.09, Math.atan2(-nz, nx));
+          if (R() > 0.26) continue; // about a quarter of the spaces taken
+          const types = ['sedan', 'sedan', 'suv', 'pickup'];
+          car(cx, g, cz, Math.atan2(-nz, nx) + (R() < 0.5 ? Math.PI : 0) + (R() - 0.5) * 0.05,
+            carCols[Math.floor(R() * carCols.length)], types[Math.floor(R() * types.length)]);
+        }
+      }
     }
   }
 
-  function car(x, g, z, yaw, col) {
-    const L = 2.6, Wd = 1.15;
-    batch.add(P.box(), col, x, g + 0.42, z, L, 0.5, Wd, yaw);
-    batch.add(P.box(), col, x - Math.cos(yaw) * 0.15, g + 0.85, z + Math.sin(yaw) * 0.15, L * 0.55, 0.42, Wd * 0.92, yaw);
-    batch.add(P.box(), 0x26323c, x - Math.cos(yaw) * 0.15, g + 0.86, z + Math.sin(yaw) * 0.15, L * 0.57, 0.3, Wd * 0.94, yaw);
-    for (const [u, v] of [[0.8, 0.5], [0.8, -0.5], [-0.8, 0.5], [-0.8, -0.5]]) {
-      const c = Math.cos(yaw), s = Math.sin(yaw);
-      batch.add(P.cyl(8), 0x1a1a1a, x + u * c + v * s, g + 0.22, z - u * s + v * c, 0.45, 0.2, 0.45, yaw, Math.PI / 2);
+  // A low-poly car in one of three shapes, with glass, lights, wheels and hubcaps.
+  function car(x, g, z, yaw, col, type = 'sedan') {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const at = (u, v) => [x + u * c + v * s, z - u * s + v * c];
+    const part = (prim, color, u, v, y, sx, sy, sz, rz = 0) => { const [px, pz] = at(u, v); batch.add(prim, color, px, g + y, pz, sx, sy, sz, yaw, 0, rz); };
+    const glass = 0x26323c, L = type === 'suv' ? 2.8 : 2.7, Wd = type === 'suv' ? 1.25 : 1.18;
+    const bodyH = type === 'sedan' ? 0.42 : 0.52, base = 0.22;
+    part(P.box(), col, 0, 0, base + bodyH / 2, L, bodyH, Wd);                                   // body
+    part(P.box(), 0x3a3f44, 0, 0, base + 0.05, L + 0.04, 0.1, Wd + 0.02);                        // bumpers / sills
+    const top = base + bodyH;
+    if (type === 'pickup') {
+      part(P.box(), col, 0.45, 0, top + 0.24, 1.0, 0.48, Wd * 0.94);                            // cab
+      part(P.box(), glass, 0.45, 0, top + 0.28, 1.02, 0.3, Wd * 0.96);
+      for (const v of [-1, 1]) part(P.box(), col, -0.7, v * (Wd / 2 - 0.04), top + 0.16, 1.2, 0.3, 0.07); // bed walls
+      part(P.box(), col, -1.3, 0, top + 0.16, 0.07, 0.3, Wd);                                    // tailgate
+      part(P.box(), 0x4a4f54, -0.7, 0, top + 0.02, 1.2, 0.04, Wd - 0.1);                         // bed floor
+    } else {
+      const cl = type === 'suv' ? 1.75 : 1.35, ch = type === 'suv' ? 0.5 : 0.42, cu = type === 'suv' ? -0.2 : -0.1;
+      part(P.box(), col, cu, 0, top + ch / 2, cl, ch, Wd * 0.9);                                 // cabin
+      part(P.box(), glass, cu, 0, top + ch * 0.55, cl + 0.02, ch * 0.6, Wd * 0.92);              // side windows
+      part(P.box(), glass, cu + cl / 2 + 0.12, 0, top + ch * 0.45, 0.42, 0.05, Wd * 0.86, -0.95);  // windshield
+      part(P.box(), glass, cu - cl / 2 - 0.08, 0, top + ch * 0.45, 0.32, 0.05, Wd * 0.86, 0.95);   // rear window
+      if (type === 'suv') for (const v of [-0.4, 0.4]) part(P.box(), 0x2a2a2a, cu, v, top + ch + 0.05, cl * 0.9, 0.05, 0.05); // roof rails
     }
-    phys.addBox(x, z, L / 2, Wd / 2, yaw, g, g + 0.67, { tag: 'car' });
-    phys.addBox(x - Math.cos(yaw) * 0.15, z + Math.sin(yaw) * 0.15, L * 0.27, Wd * 0.45, yaw, g + 0.67, g + 1.06, { tag: 'car' });
+    for (const v of [-1, 1]) {
+      part(P.box(), 0xfff3c4, L / 2 + 0.005, v * (Wd / 2 - 0.2), base + bodyH * 0.65, 0.04, 0.12, 0.22); // headlights
+      part(P.box(), 0xd02a2a, -L / 2 - 0.005, v * (Wd / 2 - 0.18), base + bodyH * 0.65, 0.04, 0.12, 0.2); // taillights
+      part(P.box(), col, 0.55, v * (Wd / 2 + 0.06), top + 0.12, 0.08, 0.08, 0.1);                // mirrors
+    }
+    for (const [u, v] of [[0.85, 1], [0.85, -1], [-0.85, 1], [-0.85, -1]]) {
+      const [wx, wz] = at(u, v * (Wd / 2 - 0.02));
+      batch.add(P.cyl(10), 0x1a1a1a, wx, g + 0.24, wz, 0.48, 0.22, 0.48, yaw, Math.PI / 2);
+      const [hx, hz] = at(u, v * (Wd / 2 + 0.09));
+      batch.add(P.cyl(8), 0xb8bcc2, hx, g + 0.24, hz, 0.26, 0.02, 0.26, yaw, Math.PI / 2);
+    }
+    phys.addBox(x, z, L / 2, Wd / 2, yaw, g, g + top, { tag: 'car' });
+    phys.addBox(x, z, L * 0.3, Wd * 0.45, yaw, g + top, g + top + 0.45, { tag: 'car' });
   }
 
   // ---------------------------------------------------------------- fountains
@@ -885,6 +929,48 @@ function groundMap(data) {
   g.globalAlpha = 0.9;
   fill(data.world.parking, '#999997');
   g.globalAlpha = 1;
+  // brick-paver plazas (as in Street View): around the observation tower and at the boardwalk's
+  // north end. Painted pixel by pixel so they stop at the water's edge.
+  {
+    const W2 = data.world, px = c.width / (f.x1 - f.x0);
+    const tower = W2.buildings.find(b => b.k === 'tower');
+    const ends = W2.tablado.flatMap(l => [l[0], l[l.length - 1]]);
+    const north = ends.reduce((a, b) => (b[1] > a[1] ? b : a), ends[0]);
+    const spots = [];
+    if (tower) spots.push([tower.r[0], tower.r[1], 26]);
+    if (north) {
+      // move the north plaza inland: toward higher ground
+      let best = null;
+      for (let a = 0; a < 8; a++) {
+        const x = north[0] + Math.cos(a * Math.PI / 4) * 14, y = north[1] + Math.sin(a * Math.PI / 4) * 14;
+        const h = data.terrainH(x * S, -y * S);
+        if (!best || h > best.h) best = { x, y, h };
+      }
+      spots.push([best.x, best.y, 20]);
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    for (const [mx, my, r] of spots) {
+      const cx = (mx - f.x0) * px, cy = (f.y1 - my) * px, rp = r * px;
+      const x0 = Math.max(0, Math.floor(cx - rp)), y0 = Math.max(0, Math.floor(cy - rp));
+      const w = Math.min(c.width - x0, Math.ceil(rp * 2)), h = Math.min(c.height - y0, Math.ceil(rp * 2));
+      const img = g.getImageData(x0, y0, w, h), d = img.data;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+        const dx = x0 + i - cx, dy = y0 + j - cy, rr = Math.hypot(dx, dy) / rp;
+        if (rr > 1) continue;
+        const wx = (x0 + i) / px + f.x0, wy = f.y1 - (y0 + j) / px;
+        if (data.terrainH(wx * S, -wy * S) < 0.25) continue;
+        // herringbone-ish brick rows, a warm gray like the real pavers
+        const bx = x0 + i, by = y0 + j;
+        const v = ((bx >> 1) + (by >> 2) + ((by >> 3) & 1)) % 3 === 0 ? -10 : ((bx + by) % 7 === 0 ? -6 : 0);
+        const k = Math.min(1, (1 - rr) * 6); // soft edge
+        const o = (j * w + i) * 4;
+        d[o] = d[o] * (1 - k) + (184 + v) * k;
+        d[o + 1] = d[o + 1] * (1 - k) + (176 + v) * k;
+        d[o + 2] = d[o + 2] * (1 - k) + (164 + v) * k;
+      }
+      g.putImageData(img, x0, y0);
+    }
+  }
   // shade the forest floor under the real woods (LiDAR canopy map)
   if (data.canopyImg) {
     const m = document.createElement('canvas');
@@ -954,6 +1040,77 @@ function buildRoutes(scene, data) {
   add(paths, 0, 0.05, 0xd8b895);
   add(roads, 0.65 * S, 0.06, 0xc9c4b6);
   add(roads, 0, 0.09, 0x656c72);
+
+  // road markings: dashed white center lines on the regular two-way roads, a double yellow
+  // center line and white edge lines on the main road (parking aisles get stall lines instead)
+  const lines = { white: [], yellow: [] };
+  // a solid line follows the road with mitered corners, so it bends without gaps
+  const solidLine = (raw, off, w, out, keep = () => true) => {
+    // extra points along long straights so the line follows the ground like the road does
+    const pts = [raw[0]];
+    for (let i = 1; i < raw.length; i++) {
+      const [ax, az] = raw[i - 1], [bx, bz] = raw[i], steps = Math.ceil(Math.hypot(bx - ax, bz - az) / 1.2);
+      for (let j = 1; j <= steps; j++) pts.push([ax + (bx - ax) * j / steps, az + (bz - az) * j / steps]);
+    }
+    const n = pts.length;
+    const edge = o => pts.map((p, i) => {
+      const a = pts[Math.max(0, i - 1)], b2 = pts[Math.min(n - 1, i + 1)];
+      let nx = -(b2[1] - a[1]), nz = b2[0] - a[0];
+      const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+      // miter: stretch the offset at corners (capped for very sharp turns)
+      let k = 1;
+      if (i > 0 && i < n - 1) {
+        const ux = pts[i][0] - a[0], uz = pts[i][1] - a[1], ul = Math.hypot(ux, uz) || 1;
+        const cos = Math.abs((-(uz / ul)) * nx + (ux / ul) * nz);
+        k = 1 / Math.max(0.5, cos);
+      }
+      const x = p[0] + nx * o * k, z = p[1] + nz * o * k;
+      return [x, H(x, z) + 0.11, z];
+    });
+    const L1 = edge(off - w / 2), L2 = edge(off + w / 2);
+    for (let i = 0; i < n - 1; i++) {
+      if (!keep((L1[i][0] + L1[i + 1][0]) / 2, (L1[i][2] + L1[i + 1][2]) / 2)) continue;
+      out.push(...L1[i], ...L2[i], ...L1[i + 1], ...L2[i], ...L2[i + 1], ...L1[i + 1]);
+    }
+  };
+  const stripe = (pts, off, w, dash, gap, out) => {
+    if (dash > 1e6) return solidLine(pts, off, w, out);
+    let carry = 0; // keeps the dash rhythm going across polyline corners
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+      const ux = dx / len, uz = dz / len, nx = -uz, nz = ux;
+      for (let d = -carry; d < len; d += dash + gap) {
+        const d0 = Math.max(0, d), d1 = Math.min(len, d + dash);
+        if (d1 - d0 < 0.05) continue;
+        const p = (t, o) => { const x = ax + ux * t + nx * o, z = az + uz * t + nz * o; return [x, H(x, z) + 0.11, z]; };
+        const a = p(d0, off - w / 2), b2 = p(d0, off + w / 2), c = p(d1, off - w / 2), e = p(d1, off + w / 2);
+        out.push(...a, ...b2, ...c, ...b2, ...e, ...c);
+      }
+      carry = (len + carry) % (dash + gap);
+    }
+  };
+  const roadPts = data.world.roads.map(r => ({ r, pts: wpts(r.p), hw: r.w * S / 2 }));
+  // edge lines stop where another road joins
+  const clearOfOthers = self => (x, z) => !roadPts.some(o => o.r !== self && o.pts.some((q, i) => i && segDist(x, z, ...o.pts[i - 1], ...q) < o.hw + 0.4));
+  for (const r of data.world.roads) {
+    const pts = wpts(r.p), hw = r.w * S / 2;
+    if (r.w >= 11) {
+      for (const o of [-0.1, 0.1]) stripe(pts, o, 0.07, 1e9, 0, lines.yellow);
+      for (const o of [-(hw - 0.3), hw - 0.3]) solidLine(pts, o, 0.1, lines.white, clearOfOthers(r));
+    } else if (r.w >= 8) stripe(pts, 0, 0.12, 1.3, 1.5, lines.white);
+  }
+  for (const [key, color] of [['white', 0xf2f2ee], ['yellow', 0xf2c230]]) {
+    if (!lines[key].length) continue;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(lines[key], 3));
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
 }
 
 // Tiled procedural detail gives grass, sand and paving definition close to the player.
