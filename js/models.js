@@ -74,38 +74,94 @@ export function shardMesh() {
 }
 
 // ---- people
+// Each person is baked into 6 meshes (torso, head, 2 arms, 2 legs) with vertex colors, so a crowd
+// stays cheap to draw. Same rig as the player model: root > body(hips) > headPivot / arms / legs.
 const LOOKS = {
-  carmen: { skin: 0x7a4a30, nose: 0x6a3c24, hair: 0x2a2a2a, shirt: 0xf5c542, shorts: 0x3b6fb6 },
-  tito: { skin: 0xc08a60, nose: 0xa87050, hair: 0x3a2a1a, shirt: 0x2e9e5b, shorts: 0x222222 },
-  gabi: { skin: 0xe0b08a, nose: 0xc89070, hair: 0x6a3a1a, shirt: 0xf27ba0, shorts: 0xffffff },
-  pepe: { skin: 0xa06848, nose: 0x8a5838, hair: 0xdddddd, shirt: 0x3b6fb6, shorts: 0xc9b48a },
-  lifeguard: { skin: 0x8a5a3a, nose: 0x7a4a2a, hair: 0x111111, shirt: 0xe3342f, shorts: 0xe3342f },
-  tourist: { skin: 0xf0c8a8, nose: 0xe0a888, hair: 0xd8b060, shirt: 0x7fd3e8, shorts: 0xf0e0b0 },
-  guia: { skin: 0x9c6a48, nose: 0x8a5a3a, hair: 0x1f1a16, shirt: 0xffffff, shorts: 0x2d6a4c },
+  carmen: { skin: 0x7a4a30, hair: 0x2a2a2a, shirt: 0xf5c542, bottom: 0x3b6fb6, dress: true, hat: 'band', hatColor: 0xe3342f, apron: true },
+  tito: { skin: 0xc08a60, hair: 0x3a2a1a, shirt: 0x2e9e5b, bottom: 0x222222, hat: 'none' },
+  gabi: { skin: 0xe0b08a, hair: 0x6a3a1a, shirt: 0xf27ba0, bottom: 0xffffff, dress: true, hat: 'none', scale: 0.75 },
+  pepe: { skin: 0xa06848, hair: 0xdddddd, shirt: 0x3b6fb6, bottom: 0xc9b48a, hat: 'cap', hatColor: 0xf0f0e0, stache: true },
+  lifeguard: { skin: 0x8a5a3a, hair: 0x111111, shirt: 0xe3342f, bottom: 0xe3342f, hat: 'cap', hatColor: 0xf7c948 },
+  tourist: { skin: 0xf0c8a8, hair: 0xd8b060, shirt: 0x7fd3e8, bottom: 0xf0e0b0, hat: 'cap', hatColor: 0xf7f7f7 },
+  guia: { skin: 0x9c6a48, hair: 0x1f1a16, shirt: 0xffffff, bottom: 0x2d6a4c, hat: 'pava', stache: true },
 };
+const SKINS = [0x5a3a26, 0x7a4a30, 0x8d5a3b, 0x9c6a48, 0xb07a55, 0xc08a60, 0xd8a47c, 0xe8bf98, 0xf0c8a8];
+const HAIRS = [0x111111, 0x1f1a16, 0x3a2a1a, 0x6a3a1a, 0x8a5a2a, 0xc8a060, 0xdddddd];
+const SHIRTS = [0xffffff, 0xe3342f, 0x2f6fd0, 0xf7c948, 0x2e9e5b, 0xf27ba0, 0x7fd3e8, 0xff8a3d, 0x8a5ac8, 0x222222, 0xf5f0e0];
+const BOTTOMS = [0x2a3a5a, 0xc9b48a, 0x222222, 0xffffff, 0x3b6fb6, 0x7a5a3a, 0xe3342f];
+
+export function randomLook(R, opts = {}) {
+  const pick = a => a[Math.floor(R() * a.length)];
+  const dress = opts.dress ?? R() < 0.35;
+  return {
+    skin: pick(SKINS), hair: pick(HAIRS), shirt: pick(SHIRTS), bottom: pick(BOTTOMS), dress,
+    hat: opts.hat ?? (R() < 0.18 ? 'pava' : R() < 0.35 ? 'cap' : 'none'), hatColor: pick(SHIRTS),
+    stache: !dress && R() < 0.3, scale: opts.scale ?? (0.92 + R() * 0.14),
+  };
+}
+
+const personMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const bake = fn => { const b = new Batch(1e7); fn(b); const gr = b.build(personMat, { cast: true, receive: false }); const m = gr.children[0]; m.matrixAutoUpdate = true; return m; };
 
 export function personMesh(kind, scale = 1) {
-  const m = makeModel(LOOKS[kind] || LOOKS.guia);
-  m.root.scale.setScalar(scale);
-  if (kind === 'carmen') {
-    // apron and a bandana
-    const ap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.36, 0.04), lam(0xffffff));
-    ap.position.set(0, 0.12, 0.22); m.body.add(ap);
-    const band = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.4), lam(0xe3342f));
-    band.position.y = 0.21; m.headPivot.add(band);
-  } else if (kind === 'lifeguard' || kind === 'tourist' || kind === 'pepe') {
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.14, 10), lam(kind === 'pepe' ? 0xf0f0e0 : kind === 'tourist' ? 0xf7f7f7 : 0xf7c948));
-    cap.position.y = 0.36; m.headPivot.add(cap);
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.2), cap.material);
-    brim.position.set(0, 0.32, 0.2); m.headPivot.add(brim);
-  } else if (kind === 'guia') {
-    const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.04, 14), lam(0xe9cf86));
-    hat.position.y = 0.36; m.headPivot.add(hat);
-    const cr = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.19, 0.18, 10), lam(0xe9cf86));
-    cr.position.y = 0.46; m.headPivot.add(cr);
+  const look = typeof kind === 'string' ? (LOOKS[kind] || LOOKS.guia) : kind;
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  body.position.y = 0.52;
+  root.add(body);
+  const torso = bake(b => {
+    b.add(P.frustum(0.87, 10), look.shirt, 0, 0.2, 0, 0.46, 0.42, 0.46);
+    b.add(P.box(), 0xffffff, 0, 0.2, 0.225, 0.03, 0.36, 0.02);
+    if (look.dress) b.add(P.frustum(0.6, 10), look.bottom, 0, -0.08, 0, 0.7, 0.42, 0.7);
+    if (look.apron) b.add(P.box(), 0xffffff, 0, 0.08, 0.24, 0.34, 0.4, 0.03);
+  });
+  body.add(torso);
+  const headPivot = new THREE.Group();
+  headPivot.position.y = 0.44;
+  body.add(headPivot);
+  const head = bake(b => {
+    b.add(P.sphere(12, 8), look.skin, 0, 0.18, 0, 0.46, 0.46, 0.46);
+    b.add(P.sphere(10, 6), look.hair, 0, 0.23, -0.02, 0.48, 0.34, 0.48);
+    for (const s of [-1, 1]) {
+      b.add(P.sphere(6, 4), 0xffffff, 0.085 * s, 0.21, 0.19, 0.09, 0.09, 0.06);
+      b.add(P.sphere(6, 4), 0x1d1d1d, 0.085 * s, 0.21, 0.215, 0.05, 0.05, 0.04);
+      b.add(P.sphere(6, 4), look.skin, 0.235 * s, 0.17, 0, 0.1, 0.1, 0.1);
+    }
+    b.add(P.sphere(6, 4), look.skin, 0, 0.15, 0.23, 0.1, 0.1, 0.1);
+    if (look.stache) b.add(P.box(), look.hair, 0, 0.1, 0.215, 0.16, 0.035, 0.04);
+    if (look.hat === 'pava') {
+      b.add(P.cyl(14), 0xe9cf86, 0, 0.36, 0, 0.8, 0.04, 0.8);
+      b.add(P.frustum(0.8, 10), 0xe9cf86, 0, 0.46, 0, 0.38, 0.2, 0.38);
+      b.add(P.cyl(10), 0x9b3b2a, 0, 0.4, 0, 0.4, 0.05, 0.4);
+    } else if (look.hat === 'cap') {
+      b.add(P.sphere(10, 6), look.hatColor, 0, 0.3, 0, 0.5, 0.25, 0.5);
+      b.add(P.box(), look.hatColor, 0, 0.3, 0.22, 0.3, 0.03, 0.2);
+    } else if (look.hat === 'band') {
+      b.add(P.sphere(10, 6), look.hatColor, 0, 0.26, -0.01, 0.5, 0.3, 0.5);
+    }
+  });
+  headPivot.add(head);
+  const arms = [], legs = [];
+  for (const s of [-1, 1]) {
+    const a = new THREE.Group();
+    a.position.set(0.25 * s, 0.37, 0);
+    a.add(bake(b => {
+      b.add(P.cyl(8), look.shirt, 0, -0.07, 0, 0.15, 0.16, 0.15);
+      b.add(P.cyl(8), look.skin, 0, -0.24, 0, 0.11, 0.2, 0.11);
+      b.add(P.sphere(6, 4), look.skin, 0, -0.36, 0, 0.14, 0.14, 0.14);
+    }));
+    body.add(a); arms.push(a);
+    const l = new THREE.Group();
+    l.position.set(0.1 * s, 0, 0);
+    l.add(bake(b => {
+      if (!look.dress) b.add(P.cyl(8), look.bottom, 0, -0.08, 0, 0.2, 0.2, 0.2);
+      b.add(P.cyl(8), look.skin, 0, -0.3, 0, 0.12, look.dress ? 0.3 : 0.24, 0.12);
+      b.add(P.box(), 0x5a3a22, 0, -0.45, 0.04, 0.13, 0.08, 0.22);
+    }));
+    body.add(l); legs.push(l);
   }
-  m.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  return m;
+  root.scale.setScalar(scale * (look.scale || 1));
+  return { root, body, headPivot, arms, legs, torso, head };
 }
 
 // ---- animals

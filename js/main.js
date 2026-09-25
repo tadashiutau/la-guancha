@@ -26,9 +26,9 @@ scene.fog = new THREE.Fog(FOG, 120, 1400);
 scene.background = FOG;
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
 
-const hemi = new THREE.HemisphereLight(0xcfe9ff, 0xa89070, 1.5);
+const hemi = new THREE.HemisphereLight(0xcfe9ff, 0x9a8468, 1.25);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
+const sun = new THREE.DirectionalLight(0xffeccc, 2.75);
 const SUN_DIR = new THREE.Vector3(0.45, 0.8, 0.4).normalize();
 sun.castShadow = true;
 sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
@@ -81,7 +81,22 @@ async function boot() {
   ui.progress(1);
   ui.ready(game.hasSave());
   lap('ready');
-  if (DEBUG) window.G = { game, player, phys, world, scene, camera, THREE, cam };
+  if (DEBUG) {
+    window.G = { game, player, phys, world, scene, camera, THREE, cam, renderer };
+    // top-down orthographic snapshot for comparing against satellite imagery
+    G.topdown = (x0 = data.bounds.x0, z0 = data.bounds.z0, x1 = data.bounds.x1, z1 = data.bounds.z1, w = 1200) => {
+      const h = Math.round(w * (z1 - z0) / (x1 - x0));
+      const oc = new THREE.OrthographicCamera(x0, x1, -z0, -z1, 1, 500);
+      oc.position.set(0, 200, 0); oc.up.set(0, 0, -1); oc.lookAt(0, 0, 0);
+      const prev = renderer.getPixelRatio();
+      renderer.setPixelRatio(1); renderer.setSize(w, h, false);
+      scene.fog.far = 1e6; scene.fog.near = 1e6;
+      renderer.render(scene, oc);
+      const url = renderer.domElement.toDataURL('image/jpeg', 0.85);
+      renderer.setPixelRatio(prev); resize();
+      return url;
+    };
+  }
   // render one frame behind the title so the world is visible
   renderer.render(scene, camera);
 }

@@ -104,6 +104,24 @@ export class UI {
     el.textContent = text || '';
   }
 
+  // points at the current quest objective from the screen edge
+  questArrow(q) {
+    const el = $('qarrow'), top = $('qtop');
+    this.quest = q;
+    if (!q) { el.style.display = 'none'; top.style.display = 'none'; return; }
+    const label = (q.label ? tr(q.label) + ' · ' : '') + q.dist + ' m';
+    top.style.display = 'block';
+    top.textContent = '⭐ ' + label;
+    if (q.on) { el.style.display = 'none'; return; }
+    const w = innerWidth / 2 - 50, h = innerHeight / 2 - 70;
+    const c = Math.cos(q.ang), s = Math.sin(q.ang);
+    const k = Math.min(w / Math.abs(c || 1e-6), h / Math.abs(s || 1e-6));
+    el.style.display = 'block';
+    el.style.transform = `translate(${c * k}px, ${-s * k}px)`;
+    el.firstElementChild.style.transform = `rotate(${-q.ang}rad)`;
+    el.lastElementChild.textContent = q.dist + ' m';
+  }
+
   talkButton(show) { $('bTalk').classList.toggle('show', !!show); }
 
   debug(s) {
@@ -184,9 +202,10 @@ export class UI {
     const [px, py] = this.toMap(player.pos.x, player.pos.z);
     g.fillStyle = '#1b6fa3'; g.fillRect(0, 0, S, S);
     g.save();
+    const ms = this.mapImg.width / 1200; // map image pixels per mini-map unit
     g.translate(S / 2, S / 2);
-    g.scale(zoom, zoom);
-    g.drawImage(this.mapImg, -px, -py);
+    g.scale(zoom / ms, zoom / ms);
+    g.drawImage(this.mapImg, -px * ms, -py * ms);
     g.restore();
     // flags
     for (const f of this.game.flags) {
@@ -195,6 +214,18 @@ export class UI {
       const x = S / 2 + (fx - px) * zoom, y = S / 2 + (fy - py) * zoom;
       if (x < 0 || y < 0 || x > S || y > S) continue;
       g.fillStyle = '#e3342f'; g.fillRect(x - 2, y - 12, 10, 7); g.fillStyle = '#fff'; g.fillRect(x - 2, y - 12, 2, 14);
+    }
+    // quest objective star
+    const ob = this.game.objective;
+    if (ob) {
+      const [ox, oy] = this.toMap(ob.x, ob.z);
+      let x = S / 2 + (ox - px) * zoom, y = S / 2 + (oy - py) * zoom;
+      const dx = x - S / 2, dy = y - S / 2, l = Math.hypot(dx, dy), max = S / 2 - 14;
+      if (l > max) { x = S / 2 + dx / l * max; y = S / 2 + dy / l * max; }
+      g.fillStyle = '#ffd23f'; g.strokeStyle = '#1b2330'; g.lineWidth = 3;
+      g.beginPath();
+      for (let i = 0; i < 10; i++) { const r = i % 2 ? 5 : 12, a = -Math.PI / 2 + i * Math.PI / 5; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+      g.closePath(); g.fill(); g.stroke();
     }
     // camera view cone + player arrow
     g.save();
@@ -216,7 +247,7 @@ export class UI {
     this.onPause(true);
     $('mapScreen').classList.add('show');
     const g = $('bigmap').getContext('2d');
-    g.drawImage(this.mapImg, 0, 0);
+    g.drawImage(this.mapImg, 0, 0, 1200, 840);
     const game = this.game;
     for (const m of game.masks) {
       if (!m.got) continue;

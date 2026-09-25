@@ -1,7 +1,9 @@
 .venv/
 data/raw/
 dist/
+music/*.wav
 la-guancha.zip
 __pycache__/
 *.pyc
 .claude/
+.snaps/

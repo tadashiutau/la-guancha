@@ -23,7 +23,7 @@ export async function loadData(onProgress = () => {}) {
   const [world, himg, cimg] = await Promise.all([
     fetch('data/world.json').then(r => r.json()),
     loadImage('data/terrain_h.png'),
-    loadImage('data/terrain_c.png'),
+    loadImage('data/terrain_c.jpg'),
   ]);
   onProgress(0.3);
   const f = world.frame;

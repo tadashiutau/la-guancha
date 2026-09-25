@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 rm -rf dist && mkdir -p dist/data
-cp -r index.html manifest.webmanifest icon*.png js vendor dist/
+cp -r index.html manifest.webmanifest icon*.png js vendor music dist/
 cp data/world.json data/terrain_h.png data/terrain_c.png dist/data/
 touch dist/.nojekyll
 rm -f la-guancha.zip && (cd dist && zip -qr ../la-guancha.zip .)

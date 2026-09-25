@@ -19,6 +19,20 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    # debug snapshots: POST a data: URL to /__snap/<name>.jpg (only from this computer)
+    def do_POST(self):
+        if self.client_address[0] != "127.0.0.1" or not self.path.startswith("/__snap/"):
+            self.send_error(403)
+            return
+        import base64
+        name = Path(self.path).name.replace("..", "")
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+        out = ROOT / ".snaps"
+        out.mkdir(exist_ok=True)
+        (out / name).write_bytes(base64.b64decode(body.split(",", 1)[1]))
+        self.send_response(204)
+        self.end_headers()
+
 
 def lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

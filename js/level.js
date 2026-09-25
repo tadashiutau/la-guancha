@@ -5,6 +5,8 @@ import { S } from './data.js';
 import { t, tr } from './i18n.js';
 import * as M from './models.js';
 import { Batch, P, rng } from './geo.js';
+import { buildProps } from './props.js';
+import { buildCrowd, FOOD_TEMP } from './npcs.js';
 
 const L = (x, y) => [x * S, -y * S];
 const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -199,11 +201,12 @@ export function defineLevel(g) {
   // ---------------------------------------------------------------- shop (Doña Carmen)
   const ks = info.kiosks.slice().sort((a, b) => a.z - b.z);
   const shopK = ks[Math.floor(ks.length / 2)];
+  shopK.shop = true;
   const sf = shopK.front;
   const sfl = Math.hypot(sf.nx, sf.nz) || 1;
   const carmen = g.npc('carmen', 'Doña Carmen', sf.x + sf.nx / sfl * 0.9, sf.z + sf.nz / sfl * 0.9, Math.atan2(sf.nx, sf.nz), async (g) => {
     const lines = [
-      { es: `¡Bienvenido a mi kiosko! Hoy tengo ${shopK.food.toLowerCase()} bien calientitos.`, en: `Welcome to my kiosk! Today's ${shopK.food} are nice and hot.` },
+      { es: `¡Bienvenido a mi kiosko! Hoy tengo ${shopK.food.toLowerCase()} ${(FOOD_TEMP[shopK.food] || { es: 'bien calientitos' }).es}.`, en: `Welcome to my kiosk! Today's ${shopK.food} are ${(FOOD_TEMP[shopK.food] || { en: 'nice and hot' }).en}.` },
       { es: '¿Qué te llevas, mijo?', en: 'What will it be, dear?' },
     ];
     const opts = [];
@@ -229,9 +232,12 @@ export function defineLevel(g) {
     }
   });
 
+  carmen.quest = g => (!g.shop.mask && g.wallet >= 100 ? 'shop' : null);
+
   // ---------------------------------------------------------------- guide at the entrance
-  g.npc('guia', 'Don Tomás', ent.x + Math.cos(entFace) * 2.2, ent.z - Math.sin(entFace) * 2.2, entFace + Math.PI, async (g) => {
+  const tomas = g.npc('guia', 'Don Tomás', ent.x + Math.cos(entFace) * 2.2, ent.z - Math.sin(entFace) * 2.2, entFace + Math.PI, async (g) => {
     const got = g.masks.filter(m => m.got).length;
+    g.q.tomas = true;
     await g.ui.say('Don Tomás', [
       { es: '¡Saludos, jíbaro! Bienvenido al Paseo Tablado La Guancha, en Ponce.', en: 'Greetings, jíbaro! Welcome to the La Guancha boardwalk in Ponce.' },
       { es: `Por todo el área hay ${g.masks.length} máscaras de vejigante escondidas. Llevas ${got}.`, en: `There are ${g.masks.length} vejigante masks hidden around here. You have ${got}.` },
@@ -241,10 +247,13 @@ export function defineLevel(g) {
     ]);
   });
 
+  tomas.quest = g => (g.q.tomas ? null : 'available');
+
   // ---------------------------------------------------------------- race with Tito
   const titoP = landSpot(fromNorth(0.07));
   const race = g.challenge({
     active: false,
+    objective() { return this.active ? { x: tw.x, y: tw.topY, z: tw.z, label: { es: 'Cima de la torre', en: 'Top of the tower' } } : null; },
     update() {
       if (!this.active) return;
       const P = g.player.pos;
@@ -254,7 +263,7 @@ export function defineLevel(g) {
       }
     },
   });
-  g.npc('tito', 'Tito', titoP.x, titoP.z, entFace, async (g) => {
+  const tito = g.npc('tito', 'Tito', titoP.x, titoP.z, entFace, async (g) => {
     if (g.q.race) return g.ui.say('Tito', [{ es: '¡Tú eres más rápido que un coquí con prisa! Revancha otro día.', en: "You're faster than a coquí in a hurry! Rematch another day." }]);
     if (race.active) return g.ui.say('Tito', [{ es: '¡Corre! ¡A la cima de la torre!', en: 'Run! To the top of the tower!' }]);
     const v = await g.ui.say('Tito', [
@@ -267,6 +276,8 @@ export function defineLevel(g) {
       g.ui.banner('¡Fuego!', tr({ es: 'A la cima de la torre', en: 'To the top of the tower' }), 1.5);
     }
   });
+
+  tito.quest = g => (g.q.race ? null : race.active ? 'active' : 'available');
 
   // ---------------------------------------------------------------- beach rings
   const ringPath = [[95, -186], [130, -176], [165, -164], [200, -150], [235, -137], [270, -124], [305, -110], [340, -96], [375, -80]];
@@ -292,6 +303,13 @@ export function defineLevel(g) {
   g.challenge({
     active: false,
     onLoad() { if (g.q.rings) startRing.visible = false; },
+    objective() {
+      if (!this.active) return null;
+      const P = g.player.pos;
+      let best = null;
+      for (const r of rings) if (!r.userData.hit && (!best || r.position.distanceTo(P) < best.position.distanceTo(P))) best = r;
+      return best && { x: best.position.x, y: best.position.y - 1.6, z: best.position.z, label: { es: 'Aros', en: 'Rings' } };
+    },
     update() {
       const P = g.player.pos, cy = P.y + 0.55;
       if (g.q.rings) return;
@@ -338,6 +356,11 @@ export function defineLevel(g) {
   });
   g.challenge({
     onLoad() { if (g.q.cocos) cocos.forEach(c => { c.down = true; c.m.visible = false; }); },
+    objective() {
+      if (g.q.cocos || !cocos.some(c => c.down)) return null;
+      const c = cocos.find(c => !c.down);
+      return c && { x: c.x, y: c.y - 0.5, z: c.z, label: { es: 'Cocos', en: 'Coconuts' } };
+    },
     update(dt) {
       if (g.q.cocos || !cocos.length) return;
       const h = g.player.hat;
@@ -385,6 +408,7 @@ export function defineLevel(g) {
       g.reveal('gatito', P.x, P.y + 1.8, P.z);
       return;
     }
+    g.q.kittenAsked = true;
     await g.ui.say('Gabi', [
       { es: 'Buaa… Perdí a mi gatita Mishu. Es anaranjada y muy traviesa.', en: 'Waah… I lost my kitten Mishu. She is orange and very naughty.' },
       { es: 'Creo que se escondió entre los carros del estacionamiento grande, cerca del tablado.', en: 'I think she hid between the cars in the big parking lot near the boardwalk.' },
@@ -392,6 +416,11 @@ export function defineLevel(g) {
   });
   g.challenge({
     onLoad() { if (g.q.kitten) { kit.state = 'home'; kitten.position.set(gabi.x + 0.8, gabi.y, gabi.z + 0.3); } },
+    objective() {
+      if (kit.state === 'follow') return { x: gabi.x, y: gabi.y, z: gabi.z, label: { es: 'Lleva a Mishu donde Gabi', en: 'Take Mishu to Gabi' } };
+      if (kit.state === 'lost' && g.q.kittenAsked) return { x: kitten.position.x, y: kitten.position.y, z: kitten.position.z, label: { es: 'Busca a Mishu', en: 'Find Mishu' } };
+      return null;
+    },
     update(dt) {
       const P = g.player.pos;
       if (kit.state === 'lost' && dist2(P.x, P.z, kitten.position.x, kitten.position.z) < 1.4) {
@@ -426,7 +455,12 @@ export function defineLevel(g) {
     pel.position.set(perches[0][0], perches[0][2], perches[0][1]);
     g.root.add(pel);
   }
+  gabi.quest = g => (kit.state === 'home' ? null : kit.state === 'follow' || g.q.kittenAsked ? 'active' : 'available');
   g.challenge({
+    objective() {
+      if (g.q.pelican || pelState.i === 0 || pelState.fly > 0) return null;
+      return { x: pel.position.x, y: pel.position.y, z: pel.position.z, label: { es: 'Pelícano', en: 'Pelican' } };
+    },
     onLoad() { if (g.q.pelican) { pel.visible = false; } },
     update(dt) {
       if (g.q.pelican || !perches.length) return;
@@ -499,6 +533,13 @@ export function defineLevel(g) {
     const meshes = pts.map(([x, y, z]) => { const m = M.shardMesh(); m.position.set(x, y, z); g.root.add(m); return m; });
     g.challenge({
       onLoad() { (g.q[key] || []).forEach(i => (meshes[i].visible = false)); },
+      objective() {
+        const got = g.q[key] || [];
+        if (!got.length || got.length === meshes.length) return null;
+        const P = g.player.pos;
+        const m = meshes.filter(m => m.visible).sort((a, b) => a.position.distanceTo(P) - b.position.distanceTo(P))[0];
+        return m && { x: m.position.x, y: m.position.y - 1.2, z: m.position.z, label: { es: 'Pedazos', en: 'Pieces' } };
+      },
       update() {
         const P = g.player.pos;
         const got = g.q[key] || (g.q[key] = []);
@@ -566,7 +607,7 @@ export function defineLevel(g) {
     ]);
   });
 
-  g.npc('lifeguard', 'Yari', lgx + 2.5, lgz + 1.5, -0.5, async (g) => g.ui.say('Yari', [
+  const yari = g.npc('lifeguard', 'Yari', lgx + 2.5, lgz + 1.5, -0.5, async (g) => g.ui.say('Yari', [
     { es: '¡Hola! Soy la salvavidas. Desde mi caseta se ve todo el arrecife.', en: "Hi! I'm the lifeguard. You can see the whole reef from my tower." },
     { es: 'Un truco: agáchate (⤓) y salta sin moverte para dar un salto mortal bien alto.', en: 'A trick: crouch (⤓) and jump while standing still for a really high backflip.' },
     { es: 'Y si pasas por el aro verde de la arena, empieza la carrera de aros. ¡Rápido!', en: 'And if you go through the green ring on the sand, the ring race starts. Hurry!' },
@@ -713,6 +754,13 @@ export function defineLevel(g) {
     const ph = R() * 5;
     g.animals.push({ update(dt, now) { ig.userData.head.position.y = 0.16 + Math.max(0, Math.sin(now * 2 + ph)) * 0.06; } });
   }
+
+  yari.quest = g => (g.q.rings || g.q.yari ? null : 'available');
+  const yariTalk = yari.talk;
+  yari.talk = async g => { g.q.yari = true; await yariTalk(g); };
+
+  buildProps(g, props);
+  buildCrowd(g, along, fromNorth, total);
 
   const pm = props.build(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   scene.add(pm);

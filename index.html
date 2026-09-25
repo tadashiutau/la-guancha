@@ -78,6 +78,10 @@
   #maskList div.got { background: #ffe39a; font-weight: 800; }
   #fade { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 9; }
   #fade.on { opacity: 1; }
+  #qarrow { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; display: none; z-index: 5; }
+  #qarrow .a { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 50%; background: #ffd23f; border: 3px solid #1b2330; display: grid; place-items: center; font-size: 22px; color: #1b2330; font-weight: 900; box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+  #qarrow .d { position: absolute; left: -60px; top: 26px; width: 120px; text-align: center; font-weight: 800; font-size: 14px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+  #qtop { top: calc(88px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-size: 15px; display: none; padding: 3px 12px; border-radius: 14px; background: rgba(0,0,0,.35); }
   @media (max-height: 460px) { #minimap { width: 90px; height: 90px; top: calc(80px + var(--safe-t)); } #counters { font-size: 18px; } }
 </style>
 </head>
@@ -93,6 +97,8 @@
 <button id="pauseBtn" aria-label="Pausa">II</button>
 <div id="minimap"><canvas id="mini" width="240" height="240"></canvas></div>
 <div id="timer" class="hud"></div>
+<div id="qtop" class="hud"></div>
+<div id="qarrow"><div class="a">➤</div><div class="d"></div></div>
 <div id="prog" class="hud"></div>
 <div id="banner" class="hud"></div>
 <div id="toast" class="hud"></div>

@@ -256,8 +256,63 @@ export function buildWorld(scene, data, phys, { mobile }) {
   // ---------------------------------------------------------------- piers + docked boats
   const PW = 2.4 * S;
   const pierLines = [];
-  for (const p of W.piers) {
-    const pts = wpts(p.p);
+  // OSM often draws docks as loose pieces. Connect each dead end that sits in the water to the
+  // nearest shore or dock with a gangway, and drop short pieces that connect to nothing.
+  const piers = W.piers.map(p => ({ ...p, pts: wpts(p.p) }));
+  const allSegs = [];
+  for (const p of piers) if (!p.ruin) for (let i = 0; i < p.pts.length - 1; i++) allSegs.push([...p.pts[i], ...p.pts[i + 1], p]);
+  const gangways = [];
+  const reach = (x, z, self) => {
+    // distance to the nearest other dock, or else to dry land (radial search)
+    let best = null;
+    for (const [ax, az, bx, bz, o] of allSegs) {
+      if (o === self) continue;
+      const d = segDist(x, z, ax, az, bx, bz);
+      if (d < PW && (!best || d < best.d)) best = { d, joined: true };
+    }
+    if (best) return best;
+    if (H(x, z) > 0.1) return { d: 0, joined: true };
+    for (let r = 1; r <= 22; r += 0.75)
+      for (let k = 0; k < 24; k++) {
+        const a = k / 24 * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+        if (H(px, pz) > 0.25) return { d: r, x: px, z: pz };
+      }
+    return null;
+  };
+  for (const p of piers) {
+    if (p.ruin || p.area || p.pts.length < 2) continue;
+    let linked = false;
+    for (const [x, z] of [p.pts[0], p.pts[p.pts.length - 1]]) {
+      const r = reach(x, z, p);
+      if (!r) continue;
+      if (r.joined) { linked = true; continue; }
+      gangways.push([x, z, r.x, r.z, p.float ? 0.3 : 0.55]);
+      linked = true;
+    }
+    let len = 0;
+    for (let i = 0; i < p.pts.length - 1; i++) len += Math.hypot(p.pts[i + 1][0] - p.pts[i][0], p.pts[i + 1][1] - p.pts[i][1]);
+    if (!linked && len < 12) p.skip = true;
+  }
+  for (const [ax, az, bx, bz, y] of gangways) {
+    const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz), yaw = Math.atan2(-dz, dx);
+    const top = Math.max(y, H(bx, bz) + 0.05);
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, my = (y + top) / 2;
+    const tilt = Math.atan2(top - y, len);
+    batch.add(P.box(), C.pier, mx, my - 0.1, mz, len + 0.6, 0.2, 1.3, yaw, 0, tilt);
+    // walkable as a gentle ramp: a row of thin steps
+    const n = Math.max(1, Math.ceil(len / 0.8));
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n;
+      phys.addBox(ax + dx * t, az + dz * t, len / n / 2 + 0.05, 0.65, yaw, y + (top - y) * t - 0.3, y + (top - y) * t, { tag: 'pier' });
+    }
+    for (const sd of [-1, 1]) {
+      const ox = -dz / len * 0.62 * sd, oz = dx / len * 0.62 * sd;
+      batch.add(P.box(), C.rail, mx + ox, my + 0.45, mz + oz, len + 0.4, 0.06, 0.06, yaw, 0, tilt);
+    }
+  }
+  for (const p of piers) {
+    if (p.skip) continue;
+    const pts = p.pts;
     const y = p.float ? 0.3 : 0.55;
     if (p.area && pts.length > 3) {
       batch.addTris(prismTris(pts, y - 0.3, y, true), p.float ? C.pierFloat : C.pier);
@@ -298,6 +353,35 @@ export function buildWorld(scene, data, phys, { mobile }) {
   }
   info.piers = pierLines;
 
+  // every boat must stay clear of other boats, docks and land
+  const boatRects = [];
+  const rectCorners = (x, z, hl, hw, yaw) => {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    return [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([u, v]) => [x + u * c + v * s, z - u * s + v * c]);
+  };
+  const sat = (A, B) => {
+    for (const poly of [A, B])
+      for (let i = 0; i < 4; i++) {
+        const [x1, z1] = poly[i], [x2, z2] = poly[(i + 1) % 4];
+        const nx = z2 - z1, nz = x1 - x2;
+        const pa = A.map(([x, z]) => x * nx + z * nz), pb = B.map(([x, z]) => x * nx + z * nz);
+        if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+      }
+    return true;
+  };
+  const boatFits = (x, z, L, Wd, yaw) => {
+    const r = rectCorners(x, z, L / 2 + 0.25, Wd / 2 + 0.25, yaw);
+    if (boatRects.some(o => sat(r, o))) return false;
+    const inner = rectCorners(x, z, L / 2, Wd / 2, yaw);
+    const probe = [...inner, [x, z], ...inner.map(([px, pz], i) => [(px + inner[(i + 1) % 4][0]) / 2, (pz + inner[(i + 1) % 4][1]) / 2])];
+    for (const [px, pz] of probe) {
+      if (H(px, pz) > -0.7) return false;
+      for (const [ax, az, bx, bz] of pierLines) if (segDist(px, pz, ax, az, bx, bz) < PW / 2 + 0.2) return false;
+    }
+    boatRects.push(r);
+    return true;
+  };
+
   // docked boats along the Club Náutico piers (the photo can't separate tightly packed hulls)
   for (const [ax, az, bx, bz, y] of pierLines) {
     const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
@@ -309,15 +393,17 @@ export function buildWorld(scene, data, phys, { mobile }) {
         const bl = (8 + R() * 6) * S;
         const nx = -uz * sd, nz = ux * sd;
         const px = ax + ux * t + nx * (PW / 2 + bl / 2 + 0.3), pz = az + uz * t + nz * (PW / 2 + bl / 2 + 0.3);
-        if (H(px, pz) > -0.8) continue;
-        addBoat(px, pz, bl, bl * 0.33, Math.atan2(-nz, nx), R() < 0.45);
+        const yaw = Math.atan2(-nz, nx);
+        if (!boatFits(px, pz, bl, bl * 0.33, yaw)) continue;
+        addBoat(px, pz, bl, bl * 0.33, yaw, R() < 0.45);
       }
     }
   }
   for (const [x, y, l, w, yaw] of W.boats) {
     const [px, pz] = [x * S, -y * S];
-    if (pierLines.some(([ax, az, bx, bz]) => segDist(px, pz, ax, az, bx, bz) < 5)) continue;
-    addBoat(px, pz, Math.max(l, 7) * S, Math.max(w, 2.4) * S, yaw, l > 8.5 && R() < 0.6);
+    const L = Math.max(l, 7) * S, Wd = Math.max(w, 2.4) * S;
+    if (!boatFits(px, pz, L, Wd, yaw)) continue;
+    addBoat(px, pz, L, Wd, yaw, l > 8.5 && R() < 0.6);
   }
 
   function addBoat(x, z, L, Wd, yaw, sail) {
@@ -413,7 +499,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
     const blobs = 3;
     for (let i = 0; i < blobs; i++) {
       const a = R() * 6.28, d = r * 0.35;
-      const s = r * (1.1 + R() * 0.5);
+      const s = r * (0.85 + R() * 0.35);
       batch.add(P.dodeca(), R() < 0.5 ? C.tree : C.tree2, x + Math.cos(a) * d, g + th + s * 0.35 + i * 0.2, z + Math.sin(a) * d, s * 1.2, s * 0.8, s * 1.2, R() * 6, 0, 0, 0.18);
     }
     phys.addBox(x, z, 0.22, 0.22, 0, g - 0.5, g + th, { tag: 'trunk', ground: false });
@@ -442,7 +528,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   for (const lot of W.parking) {
     const pts = wpts(lot);
     const area = Math.abs(polyArea(pts));
-    const n = Math.floor(area / 60);
+    const n = Math.floor(area / 190); // the real lots are mostly empty
     // car rows follow the lot's longest edge
     let best = 0, yaw = 0;
     for (let i = 0; i < pts.length; i++) {
@@ -592,7 +678,7 @@ function buildTerrain(scene, data) {
     for (let i = 0; i < gw; i++) {
       const k = j * gw + i;
       pos[k * 3] = X0 + i * step; pos[k * 3 + 1] = heights[k]; pos[k * 3 + 2] = Z0 + j * step;
-      uv[k * 2] = (i * 3 + 0.5) / (gw * 3); uv[k * 2 + 1] = 1 - (j * 3 + 0.5) / (gh * 3);
+      uv[k * 2] = i / gw; uv[k * 2 + 1] = 1 - j / gh;
     }
   const idx = new Uint32Array((gw - 1) * (gh - 1) * 6);
   let n = 0;
@@ -607,9 +693,9 @@ function buildTerrain(scene, data) {
   g.computeVertexNormals();
   const tex = new THREE.Texture(data.colorImg);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   tex.needsUpdate = true;
-  const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex }));
+  const m = new THREE.Mesh(g, detailMaterial(tex));
   m.receiveShadow = true;
   scene.add(m);
 
@@ -617,6 +703,39 @@ function buildTerrain(scene, data) {
   const far = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshLambertMaterial({ color: 0x1b4a66 }));
   far.rotation.x = -Math.PI / 2; far.position.y = -9 * 0.6 - 0.05;
   scene.add(far);
+}
+
+// Ground material: the stylized photo plus a fine tiling detail pattern (world-space) so the
+// ground still reads crisp right at the player's feet.
+function detailMaterial(tex) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const img = g.createImageData(128, 128);
+  let s = 7;
+  const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 128 * 128; i++) {
+    const v = 118 + r() * 20 + (r() < 0.06 ? 16 : 0);
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const d = new THREE.CanvasTexture(c);
+  d.wrapS = d.wrapT = THREE.RepeatWrapping;
+  d.anisotropy = 8;
+  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uDetail = { value: d };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uDetail; varying vec3 vWp;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float dt = texture2D(uDetail, vWp.xz * 0.9).r * 0.6 + texture2D(uDetail, vWp.xz * 0.23).r * 0.4;
+        float fade = 1.0 - smoothstep(25.0, 80.0, length(vWp - cameraPosition));
+        diffuseColor.rgb *= mix(1.0, dt * 2.0, 0.55 * fade);`);
+  };
+  return mat;
 }
 
 // ------------------------------------------------------------------ water
@@ -651,7 +770,7 @@ function buildWater(scene, data) {
         vec2 uv = (vW.xz - uBounds.xy) / (uBounds.zw - uBounds.xy);
         float inside = step(0.,uv.x)*step(uv.x,1.)*step(0.,uv.y)*step(uv.y,1.);
         float d = mix(1., texture2D(uDepth, uv).r, inside);
-        vec3 shallow = vec3(0.30,0.86,0.80), mid = vec3(0.07,0.58,0.72), deep = vec3(0.03,0.28,0.52);
+        vec3 shallow = vec3(0.30,0.78,0.70), mid = vec3(0.05,0.44,0.46), deep = vec3(0.02,0.24,0.30);
         vec3 col = mix(shallow, mid, smoothstep(0.0,0.25,d));
         col = mix(col, deep, smoothstep(0.35,1.0,d));
         // moving ripples
@@ -661,12 +780,12 @@ function buildWater(scene, data) {
         col += (rip-0.5)*0.08;
         // sun glints
         float gl = smoothstep(0.86, 0.97, n(vW.xz*4.5 + uTime*0.8) * n(vW.xz*3.1 - uTime*0.6) * 1.9);
-        col += gl * 0.3 * (1. - smoothstep(20., 90., vDist));
+        col += gl * 0.16 * (1. - smoothstep(20., 90., vDist));
         // shore foam
         float foam = (1.-smoothstep(0.0,0.05,d)) * step(0.45, n(vW.xz*1.2 + vec2(0.,uTime*0.8)) + 0.2);
         foam = max(foam, (1.-smoothstep(0.0,0.02,d)));
         col = mix(col, vec3(1.), foam*0.85*inside);
-        float a = mix(0.55, 0.93, smoothstep(0.0,0.45,d));
+        float a = mix(0.42, 0.9, smoothstep(0.0,0.5,d));
         a = max(a, foam*inside);
         if (!gl_FrontFacing) { col = mix(col, vec3(0.1,0.5,0.6), 0.5); a = 0.6; }
         float f = smoothstep(uFogNear, uFogFar, vDist);

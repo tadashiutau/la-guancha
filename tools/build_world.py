@@ -123,6 +123,36 @@ def find_trees(veg, dtm, wetland_mask, bld_mask, land):
     return trees
 
 
+def lidar_buildings(bldz, dtm, land, osm_mask, esri):
+    from rasterio.features import shapes
+    nd = np.nan_to_num(bldz - dtm, nan=0)
+    nd[~land] = 0
+    mu = ndimage.uniform_filter(nd, 3)
+    rough = np.sqrt(np.maximum(ndimage.uniform_filter(nd * nd, 3) - mu * mu, 0))
+    exg = 2 * esri[..., 1] - esri[..., 0] - esri[..., 2]
+    m = (nd > 2.6) & (nd < 25) & (rough < 0.5) & (exg < 14) & ~ndimage.binary_dilation(osm_mask, iterations=3)
+    m = ndimage.binary_opening(m, iterations=1)
+    m = ndimage.binary_fill_holes(ndimage.binary_closing(m, iterations=2))
+    lab, n = ndimage.label(m)
+    out = []
+    for geom, val in shapes(lab.astype("int32"), mask=lab > 0, transform=LOCAL):
+        p = Polygon(geom["coordinates"][0]).simplify(1.0)
+        if not p.is_valid or p.area < 30 or p.area > 5000:
+            continue
+        rr = p.minimum_rotated_rectangle
+        if p.area / max(rr.area, 1) < 0.6:
+            continue
+        # footprints come out ragged; square them up to their oriented rectangle when they nearly fill it
+        if p.area / rr.area > 0.8:
+            p = rr
+        sel = lab == int(val)
+        ht = float(np.median(nd[sel]))
+        if np.std(nd[sel]) > 2.5:
+            continue  # tree clumps are bumpy
+        out.append((p, ht))
+    return out
+
+
 # ---------------------------------------------------------------- boats from NAIP
 def find_boats(rgb, water):
     bright = rgb.mean(0)
@@ -147,6 +177,100 @@ def find_boats(rgb, water):
         yaw = math.atan2(evec[1, 1], evec[0, 1])
         boats.append([round(cx, 1), round(cy, 1), round(length, 1), round(width, 1), round(yaw, 3)])
     return boats
+
+
+# ---------------------------------------------------------------- stylized ground (0.5 m)
+PPM = 2  # texture pixels per meter
+
+
+def stylized_ground(ways_where, poly, land, beach, sea):
+    """Satellite photo cleaned up and stylized, with crisp roads and walkways drawn on top."""
+    from PIL import ImageDraw, ImageFilter
+    Wp, Hp = W * PPM, H * PPM
+    e = Image.open(RAW / "esri.jpg").convert("RGB")
+    if e.size != (Wp, Hp):
+        e = e.resize((Wp, Hp), Image.LANCZOS)
+    e = np.asarray(e).astype("f4")
+    # remove cars and speckle, keep edges
+    med = np.stack([ndimage.median_filter(e[..., i], 5) for i in range(3)], -1)
+    base = 0.75 * med + 0.25 * ndimage.gaussian_filter(e, (1, 1, 0))
+    # lift tree/building shadows toward the local brightness
+    L = base.mean(-1)
+    lm = ndimage.gaussian_filter(L, 12)
+    dark = np.clip((lm - L - 8) / 40, 0, 1)[..., None]
+    base = base + (lm - L)[..., None] * dark * 0.75
+    # stylize: richer color, a touch brighter
+    m = base.mean(-1, keepdims=True)
+    base = m + (base - m) * 1.7
+    base = (base - 128) * 1.1 + 130
+    exg = 2 * base[..., 1] - base[..., 0] - base[..., 2]
+    g = np.clip((exg - 8) / 35, 0, 1)[..., None]
+    lush = np.array([98, 170, 72], "f4") * (0.8 + 0.4 * (base.mean(-1, keepdims=True) / 255))
+    base = base * (1 - g * 0.55) + lush * g * 0.55
+
+    up = lambda a: np.repeat(np.repeat(a, PPM, 0), PPM, 1)
+    land2 = ndimage.gaussian_filter(up(land).astype("f4"), 1.2)[..., None]
+    sea2 = np.asarray(Image.fromarray(np.clip(sea, 0, 255).astype(np.uint8)).resize((Wp, Hp), Image.BILINEAR)).astype("f4")
+    sand = np.array([238, 220, 168], "f4")
+    bm = ndimage.gaussian_filter(up(beach & land).astype("f4"), 2)[..., None]
+    base = base * (1 - bm * 0.5) + sand * bm * 0.5
+    col = base * land2 + sea2 * (1 - land2)
+
+    # vector overlay drawn at 2x and downsampled for smooth, sharp edges
+    SS = 2
+    over = Image.new("RGBA", (Wp * SS, Hp * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(over)
+    k = PPM * SS
+    P = lambda pts: [((x - X0) * k, (Y1 - y) * k) for x, y in pts]
+    lots = [poly(p) for t, p in ways_where(lambda t: t.get("amenity") == "parking") if len(p) > 3]
+    from shapely.geometry import LineString as LS
+    from shapely.ops import unary_union as UU
+    lot_u = UU(lots) if lots else None
+
+    def line(pts, width_m, fill):
+        d.line(P(pts), fill=fill, width=max(1, int(width_m * k)), joint="curve")
+        r = width_m * k / 2
+        for x, y in P(pts):
+            d.ellipse([x - r, y - r, x + r, y + r], fill=fill)
+
+    roads = []
+    for t, p in ways_where(lambda t: t.get("highway") in ("primary", "residential", "tertiary", "unclassified", "service")):
+        if len(p) < 2:
+            continue
+        hw = t["highway"]
+        if hw == "service" and lot_u is not None and LS(p).within(lot_u.buffer(2)):
+            continue  # parking-lot aisles already show in the photo
+        w = {"primary": 10.5, "service": 5.5}.get(hw, 7.5)
+        roads.append((hw, p, w))
+    for hw, p, w in roads:                       # curbs / sidewalks
+        line(p, w + 2.2, (214, 208, 196, 255))
+    for hw, p, w in roads:                       # asphalt
+        line(p, w, (96, 100, 108, 255))
+    for hw, p, w in roads:                       # lane markings
+        if hw == "service":
+            continue
+        ls = LS(p)
+        if hw == "primary":
+            for off in (-0.18, 0.18):
+                o = ls.parallel_offset(off, "left") if off > 0 else ls.parallel_offset(-off, "right")
+                if not o.is_empty and o.geom_type == "LineString":
+                    d.line(P(o.coords), fill=(247, 201, 72, 255), width=max(1, int(0.18 * k)))
+        else:
+            n = int(ls.length // 6)
+            for i in range(n):
+                a, b = ls.interpolate(i * 6), ls.interpolate(i * 6 + 3)
+                d.line(P([(a.x, a.y), (b.x, b.y)]), fill=(245, 245, 240, 255), width=max(1, int(0.18 * k)))
+    for t, p in ways_where(lambda t: t.get("highway") in ("footway", "path", "pedestrian") and t.get("bridge") is None):
+        if len(p) > 1:
+            line(p, 2.4, (214, 176, 146, 150))
+    over = over.resize((Wp, Hp), Image.LANCZOS)
+    o = np.asarray(over).astype("f4")
+    a = (o[..., 3:] / 255) * land2
+    col = col * (1 - a) + o[..., :3] * a
+    # a little film grain so large flat areas don't look plastic
+    grain = ndimage.gaussian_filter(np.random.default_rng(3).standard_normal((Hp, Wp)), 0.7)[..., None]
+    col = col + grain * 5 * land2
+    return np.clip(col, 0, 255).astype(np.uint8)
 
 
 # ---------------------------------------------------------------- main
@@ -232,33 +356,18 @@ def main():
     patch = ndimage.gaussian_filter(np.random.default_rng(1).random((H, W)), 6)
     col = col + (patch[..., None] - 0.5) * 50
 
-    def paint(m, c):
-        col[m] = PAL[c]
-
-    lines = lambda f, w: mask([LineString(p).buffer(w, cap_style="round") for t, p in ways_where(f) if len(p) > 1])
-    paint(mask([poly(p) for t, p in ways_where(lambda t: t.get("amenity") == "parking") if len(p) > 3]), "lot")
-    paint(lines(lambda t: t.get("highway") in ("service",), 3.0), "asphalt")
-    paint(lines(lambda t: t.get("highway") in ("residential", "tertiary", "unclassified"), 4.0), "asphalt")
-    paint(lines(lambda t: t.get("highway") == "primary", 5.5), "asphalt")
-    paint(lines(lambda t: t.get("highway") in ("footway", "path", "pedestrian") and t.get("bridge") is None, 1.4), "paver")
-    paint(beach & land, "sand")
-    paint(mask([poly(p) for t, p in ways_where(lambda t: t.get("man_made") == "breakwater") if len(p) > 3]) & land, "rock")
-    paint(wetland & land, "mud")
-    paint(mask([poly(p) for t, p in ways_where(lambda t: t.get("leisure") == "pitch") if len(p) > 3]), "court")
-    paint(bldm, "concrete")
-    pool = mask([poly(p) for t, p in ways_where(lambda t: t.get("leisure") == "swimming_pool") if len(p) > 3])
-    paint(pool, "pool")
-    # seabed from imagery brightness
+    # seabed tones from imagery brightness (1 m), used under water in the stylized ground
     lum = ndimage.median_filter(rgb.mean(0), 7)
+    # boats and surf are small bright blobs: a grey opening removes them from the seabed
+    lum = np.where(water, ndimage.grey_opening(lum, size=(21, 21)), lum)
     lum = ndimage.gaussian_filter(lum, 2)
     lo, hi = np.percentile(lum[water], [5, 95])
     t = np.clip((lum - lo) / max(hi - lo, 1), 0, 1)[..., None]
     sea = np.array(PAL["sea_reef"]) * (1 - t) + np.array(PAL["sea_sand"]) * t
     sea = sea * (1 - 0.3 * np.clip(-h / 10, 0, 1))[..., None]
-    col[water] = sea[water]
-    col = np.clip(col, 0, 255).astype(np.uint8)
-    Image.fromarray(col).save(OUT / "terrain_c.png")
-    print("terrain_c", col.shape)
+    ground = stylized_ground(ways_where, poly, land, beach, sea)
+    Image.fromarray(ground).save(OUT / "terrain_c.jpg", quality=86, optimize=True)
+    print("terrain_c", ground.shape, (OUT / "terrain_c.jpg").stat().st_size // 1024, "KB")
 
     # ---- vectors
     world = {"frame": {"lat0": 37, "x0": X0, "x1": X1, "y0": Y0, "y1": Y1, "hstep": HSTEP}}
@@ -279,6 +388,23 @@ def main():
     else:
         print("WARNING: no LiDAR tiles - trees skipped, buildings use default heights")
 
+    def building(p, kind, ht, src):
+        m = mask([p.buffer(-1.0) if p.buffer(-1.0).area > 2 else p])
+        base = float(np.median(h[m])) if m.any() else 1.0
+        rc = np.median(esri[m], 0) if m.any() else np.array([180, 180, 180])
+        # boost saturation a bit for the stylized look
+        rc = np.clip(rc.mean() + (rc - rc.mean()) * 1.6, 0, 255)
+        # oriented bounding rectangle: center, half sizes, angle of the first axis; rectness = fill ratio
+        mrr = list(p.minimum_rotated_rectangle.exterior.coords)
+        (ax, ay), (bx, by), (cx2, cy2) = mrr[0], mrr[1], mrr[2]
+        a1, a2 = math.hypot(bx - ax, by - ay), math.hypot(cx2 - bx, cy2 - by)
+        ang = math.atan2(by - ay, bx - ax)
+        ctr = p.minimum_rotated_rectangle.centroid
+        rect = [round(ctr.x, 1), round(ctr.y, 1), round(a1 / 2, 2), round(a2 / 2, 2), round(ang, 3),
+                round(p.area / max(a1 * a2, 1e-6), 2)]
+        return {"k": kind, "p": rnd(list(p.exterior.coords)[:-1]), "h": round(ht, 1), "b": round(base, 2),
+                "rc": [int(v) for v in rc], "r": rect, "src": src}
+
     blds = []
     for t, p in bld_polys:
         p = p.simplify(0.6)
@@ -295,21 +421,12 @@ def main():
             "tower" if t.get("man_made") == "tower" else ("roof" if t.get("building") == "roof" else "bld"))
         if ht is None or not (2 < ht < 40):
             ht = {"tank": 12, "tower": 12, "roof": 5}.get(kind, 4.5 if p.area < 200 else 7)
-        m = mask([p.buffer(-1.0) if p.buffer(-1.0).area > 2 else p])
-        base = float(np.median(h[m])) if m.any() else 1.0
-        rc = np.median(esri[m], 0) if m.any() else np.array([180, 180, 180])
-        # boost saturation a bit for the stylized look
-        rc = np.clip(rc.mean() + (rc - rc.mean()) * 1.6, 0, 255)
-        # oriented bounding rectangle: center, half sizes, angle of the first axis; rectness = fill ratio
-        mrr = list(p.minimum_rotated_rectangle.exterior.coords)
-        (ax, ay), (bx, by), (cx2, cy2) = mrr[0], mrr[1], mrr[2]
-        a1, a2 = math.hypot(bx - ax, by - ay), math.hypot(cx2 - bx, cy2 - by)
-        ang = math.atan2(by - ay, bx - ax)
-        ctr = p.minimum_rotated_rectangle.centroid
-        rect = [round(ctr.x, 1), round(ctr.y, 1), round(a1 / 2, 2), round(a2 / 2, 2), round(ang, 3),
-                round(p.area / max(a1 * a2, 1e-6), 2)]
-        blds.append({"k": kind, "p": rnd(list(p.exterior.coords)[:-1]), "h": round(ht, 1), "b": round(base, 2),
-                     "rc": [int(v) for v in rc], "r": rect})
+        blds.append(building(p, kind, ht, "osm"))
+    # buildings OpenStreetMap is missing, found in the LiDAR: tall, flat, not green, not already mapped
+    if lid:
+        for p, ht in lidar_buildings(bldz, dtm, land, bldm, esri):
+            blds.append(building(p, "bld", ht, "lidar"))
+        print("lidar buildings", sum(1 for b in blds if b["src"] == "lidar"))
     world["buildings"] = blds
 
     piers = []

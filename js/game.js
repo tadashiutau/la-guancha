@@ -82,6 +82,7 @@ export class Game {
     }
     this.root = new THREE.Group();
     this.scene.add(this.root);
+    this.buildMarkers();
 
     defineLevel(this);
     this.buildInstances();
@@ -106,6 +107,8 @@ export class Game {
     const g = new THREE.Group();
     const mesh = M.maskMesh(m.variant);
     mesh.scale.setScalar(0.9);
+    mesh.material.transparent = true;
+    mesh.renderOrder = 3;
     g.add(mesh);
     const beam = M.beamMesh();
     g.add(beam);
@@ -174,18 +177,86 @@ export class Game {
 
   challenge(c) { this.challenges.push(c); return c; }
 
+  // ------------------------------------------------------------ quest markers
+  // "!" over people with a quest to start, "?" while it's running, "$" when the shop has something
+  // you can afford; a bouncing marker + screen-edge arrow point at the current objective.
+  buildMarkers() {
+    const badge = (ch, bg) => {
+      const c = document.createElement('canvas'); c.width = c.height = 96;
+      const x = c.getContext('2d');
+      x.fillStyle = bg; x.strokeStyle = '#1b2330'; x.lineWidth = 7;
+      x.beginPath(); x.arc(48, 44, 36, 0, Math.PI * 2); x.fill(); x.stroke();
+      x.beginPath(); x.moveTo(36, 76); x.lineTo(48, 94); x.lineTo(60, 76); x.fill();
+      x.fillStyle = '#1b2330'; x.font = 'bold 58px Trebuchet MS, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(ch, 48, 47);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    this.badgeTex = { available: badge('!', '#f7c948'), active: badge('?', '#7fd3e8'), shop: badge('$', '#8fe388') };
+    const g = new THREE.Group();
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true }));
+    gem.scale.set(0.8, 1.3, 0.8);
+    const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.35, 60, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xffe38a, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.position.y = 30;
+    gem.renderOrder = halo.renderOrder = 6;
+    g.add(gem, halo);
+    g.visible = false;
+    this.scene.add(g);
+    this.qMark = g; this.qGem = gem;
+  }
+
+  updateMarkers(dt, now) {
+    for (const n of this.npcs) {
+      if (!n.quest) continue;
+      const st = n.m.root.visible ? n.quest(this) : null;
+      if (!n.badge) {
+        n.badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.badgeTex.available, depthTest: false, transparent: true }));
+        n.badge.scale.set(0.7, 0.7, 0.7);
+        n.badge.renderOrder = 7;
+        this.root.add(n.badge);
+      }
+      n.badge.visible = !!st;
+      if (st) {
+        n.badge.material.map = this.badgeTex[st];
+        n.badge.position.set(n.x, n.y + 2.0 + Math.sin(now * 3) * 0.08, n.z);
+      }
+    }
+    let obj = null;
+    for (const c of this.challenges) { obj = c.objective?.(); if (obj) break; }
+    this.objective = obj;
+    this.qMark.visible = !!obj;
+    if (!obj) { this.ui.questArrow(null); return; }
+    this.qMark.position.set(obj.x, obj.y + 1.6 + Math.sin(now * 3) * 0.2, obj.z);
+    this.qGem.rotation.y = now * 2;
+    const cam = this.cam.cam;
+    const v = new THREE.Vector3(obj.x, obj.y + 1.6, obj.z).project(cam);
+    const behind = v.z > 1;
+    const dist = Math.round(Math.hypot(obj.x - this.player.pos.x, obj.z - this.player.pos.z) / S);
+    const onScreen = !behind && Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.85;
+    if (onScreen) { this.ui.questArrow({ on: true, dist, label: obj.label }); return; }
+    let ax = behind ? -v.x : v.x, ay = behind ? -v.y : v.y;
+    if (behind && Math.abs(ay) < 0.2) ay = -0.5;
+    const ang = Math.atan2(ay, ax);
+    this.ui.questArrow({ on: false, ang, dist, label: obj.label });
+  }
+
   // ------------------------------------------------------------ instanced collectibles
   buildInstances() {
     const coinMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x3a2a00 });
     this.coinMesh = new THREE.InstancedMesh(M.coinGeometry(), coinMat, this.coins.length + 80);
     this.coinMesh.castShadow = true;
     this.coinMesh.frustumCulled = false;
+    // drawn after the water so coins under the surface still shine through
+    coinMat.transparent = true;
+    this.coinMesh.renderOrder = 3;
     this.scene.add(this.coinMesh);
     this.dyn = [];
     const shellMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x33101a });
     this.conchaMesh = new THREE.InstancedMesh(M.conchaGeometry(), shellMat, Math.max(1, this.conchas.length));
     this.conchaMesh.castShadow = true;
     this.conchaMesh.frustumCulled = false;
+    shellMat.transparent = true;
+    this.conchaMesh.renderOrder = 3;
     this.scene.add(this.conchaMesh);
   }
 
@@ -317,6 +388,18 @@ export class Game {
     const P = this.player.pos;
     const col = this.player.groundCol;
     if (col && col.tag === 'crate' && col.data) this.breakCrate(col.data);
+    // underwater coins twinkle so they're easy to spot from the surface
+    if ((this.twinkleT = (this.twinkleT || 0) - dt) < 0) {
+      this.twinkleT = 0.08;
+      const P = this.player.pos;
+      for (let tries = 0; tries < 6; tries++) {
+        const c = this.coins[(Math.random() * this.coins.length) | 0];
+        if (c && c.alive && c.y < 0 && Math.hypot(c.x - P.x, c.z - P.z) < 30) {
+          this.fx.emit(c.x, c.y + 0.3, c.z, 1, { color: 0xffe08a, speed: 0.1, up: 0.5, life: 0.6, grav: 0 });
+          break;
+        }
+      }
+    }
     for (const s of this.spots) {
       if (s.used) continue;
       if (Math.hypot(s.x - P.x, s.z - P.z) < 1.8 && Math.abs(s.y - P.y) < 1.5) this.useSpot(s);
@@ -582,7 +665,7 @@ export class Game {
     const cam = this.cam.cam.position;
     for (const f of this.flags) f.mesh.visible = Math.hypot(f.x - cam.x, f.z - cam.z) < 90;
     for (const n of this.npcs) {
-      if (n.hidden) continue;
+      if (n.hidden || n.custom) continue;
       n.m.root.visible = Math.hypot(n.x - cam.x, n.z - cam.z) < 70;
       if (!n.m.root.visible) continue;
       n.phase += dt;
@@ -597,6 +680,18 @@ export class Game {
         n.m.root.rotation.y += d * Math.min(1, dt * 4);
       }
       n.anim?.(dt, now);
+    }
+    // underwater coins twinkle so they're easy to spot from the surface
+    if ((this.twinkleT = (this.twinkleT || 0) - dt) < 0) {
+      this.twinkleT = 0.08;
+      const P = this.player.pos;
+      for (let tries = 0; tries < 6; tries++) {
+        const c = this.coins[(Math.random() * this.coins.length) | 0];
+        if (c && c.alive && c.y < 0 && Math.hypot(c.x - P.x, c.z - P.z) < 30) {
+          this.fx.emit(c.x, c.y + 0.3, c.z, 1, { color: 0xffe08a, speed: 0.1, up: 0.5, life: 0.6, grav: 0 });
+          break;
+        }
+      }
     }
     for (const s of this.spots) {
       if (s.used) continue;
@@ -616,6 +711,7 @@ export class Game {
       if (k >= 1) w.visible = false;
     }
     for (const a of this.animals) a.update(dt, now);
+    if (this.cam) this.updateMarkers(dt, now);
     for (const c of this.challenges) c.animate?.(dt, now);
     this.fx.update(dt);
   }
