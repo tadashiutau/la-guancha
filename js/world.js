@@ -38,6 +38,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   const R = rng(7);
   const batch = new Batch(60);
   const foliageTrees = [];
+  let planterN = 0;
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const info = { kiosks: [], deckY: 1, tablado: [], tower: null, boats: [], trees: [], piers: [], lampTops: [],
     pilings: [], signs: [], palmCrowns: [] };
@@ -106,14 +107,16 @@ export function buildWorld(scene, data, phys, { mobile }) {
         const t = (k + 0.5) / lamps;
         const px = ax + dx * t + lx, pz = az + dz * t + lz;
         lamp(batch, px, y, pz, yaw);
-        info.lampTops.push([px, y + 2.35, pz]);
-        phys.addBox(px, pz, 0.12, 0.12, 0, y, y + 2.2, { tag: 'lamp' });
-        // planter with shrubs between lamps
+        info.lampTops.push([px, y + 3.2, pz]);
+        phys.addBox(px, pz, 0.25, 0.25, yaw, y, y + 3.0, { tag: 'lamp' });
+        // a long low stone planter with shrubs between lamps; every other one grows a coconut palm
         const qx = ax + dx * (t + 0.5 / lamps) + lx * 1.05, qz = az + dz * (t + 0.5 / lamps) + lz * 1.05;
         if (t + 0.5 / lamps < 1) {
-          batch.add(P.box(), C.planter, qx, y + 0.22, qz, 1.1, 0.44, 0.7, yaw, 0, 0, 0.1);
-          batch.add(P.ico(0), C.shrub, qx, y + 0.62, qz, 1.1, 0.55, 0.7, R() * 6, 0, 0, 0.2);
-          phys.addBox(qx, qz, 0.55, 0.35, yaw, y, y + 0.44, { tag: 'planter' });
+          batch.add(P.box(), 0xc9c2b4, qx, y + 0.22, qz, 2.6, 0.44, 1.0, yaw, 0, 0, 0.06);
+          batch.add(P.box(), 0x6b5a44, qx, y + 0.45, qz, 2.4, 0.04, 0.8, yaw);
+          for (const u of [-0.8, 0.8]) batch.add(P.ico(0), R() < 0.5 ? C.shrub : 0x5aa446, qx + Math.cos(yaw) * u, y + 0.62, qz - Math.sin(yaw) * u, 0.8, 0.5, 0.7, R() * 6, 0, 0, 0.2);
+          phys.addBox(qx, qz, 1.3, 0.5, yaw, y, y + 0.44, { tag: 'planter' });
+          if ((planterN++ % 2) === 0) palm(qx, y + 0.44, qz, 3.8 + R() * 1.2);
         }
       }
     }
@@ -468,7 +471,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   const tops = [];
   // no trees inside the fountains (they're built later)
   const fountains = W.poi.filter(p => p.t.amenity === 'fountain').map(p => [p.p[0] * S, -p.p[1] * S]);
-  const inFountain = (x, z) => fountains.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 6);
+  const inFountain = (x, z) => fountains.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8);
   for (const [x, y, h, rad, kind] of W.trees) {
     const px = x * S, pz = -y * S, g = H(px, pz);
     if (g < 0.1 || inFountain(px, pz)) continue;
@@ -669,49 +672,52 @@ export function buildWorld(scene, data, phys, { mobile }) {
     const [x, z] = [poi.p[0] * S, -poi.p[1] * S];
     const g = H(x, z);
     const big = Math.hypot(poi.p[0] + 5, poi.p[1] - 58) < 10; // the roundabout fountain
-    const r = big ? 4 : 3;
+    if (big) {
+      // Fuente del León Ponceño (María Elena Perales), as it looks in 2025 Street View: a wide,
+      // shallow blue-painted basin ringed by short concrete bollards; in the middle a rough gray
+      // stone drum topped by a flared red-brick ring, and Ponce's lion walking on top, tail up.
+      const r = 6.2;
+      const ring = circle(x, z, r, 28);
+      batch.addTris(prismTris(ring, g, g + 0.35, false), 0xf0ece2);
+      batch.add(P.cyl(28), 0x5aa8e0, x, g + 0.12, z, r * 2 - 0.3, 0.1, r * 2 - 0.3);
+      phys.add(ring, g, g + 0.35, { tag: 'fountain' });
+      for (let i = 0; i < 18; i++) {
+        const a = i / 18 * Math.PI * 2, bx = x + Math.cos(a) * (r + 0.5), bz = z + Math.sin(a) * (r + 0.5);
+        batch.add(P.cyl(8), 0xd8d2c4, bx, g + 0.35, bz, 0.4, 0.7, 0.4, 0, 0, 0, 0.05);
+        phys.addBox(bx, bz, 0.2, 0.2, 0, g, g + 0.7, { tag: 'bollard' });
+      }
+      batch.add(P.cyl(14), 0x8d8a82, x, g + 0.7, z, 3.2, 1.4, 3.2, 0, 0, 0, 0.12);
+      batch.add(P.frustum(1.25, 16), 0xa3412c, x, g + 1.65, z, 3.3, 0.55, 3.3);
+      batch.add(P.cyl(16), 0xb24a32, x, g + 1.97, z, 3.9, 0.12, 3.9);
+      const top = g + 2.03;
+      phys.add(circle(x, z, 1.9, 14), g, top, { tag: 'pedestal' });
+      // the lion, mid-stride
+      const yaw = 0.6;
+      const lc = Math.cos(yaw), ls = Math.sin(yaw);
+      const L2 = (u, v, dy, sx, sy2, sz, prim, col, rx = 0, rz = 0) =>
+        batch.add(prim, col, x + v * ls + u * lc, top + dy, z + v * lc - u * ls, sx, sy2, sz, yaw, rx, rz);
+      const bronze = 0xc09a4a, mane = 0x9a7534;
+      L2(0, 0, 0.95, 0.8, 0.75, 1.8, P.sphere(10, 8), bronze);                               // body
+      for (const [u, v, sw] of [[-0.24, 0.6, 0.3], [0.24, 0.55, -0.25], [-0.24, -0.55, -0.25], [0.24, -0.6, 0.3]]) {
+        L2(u, v + sw * 0.3, 0.42, 0.24, 0.85, 0.24, P.cyl(6), bronze, sw);                    // striding legs
+      }
+      L2(0, 0.95, 1.45, 1.15, 1.15, 0.95, P.dodeca(), mane);                                 // mane
+      L2(0, 1.22, 1.45, 0.58, 0.56, 0.56, P.sphere(8, 6), bronze);                          // face
+      L2(0, 1.48, 1.36, 0.3, 0.22, 0.24, P.box(), bronze);                                  // muzzle
+      for (const u of [-0.17, 0.17]) L2(u, 1.46, 1.56, 0.07, 0.07, 0.05, P.sphere(4, 3), 0x3a2a10);
+      L2(0, -1.0, 1.35, 0.09, 0.09, 1.0, P.cyl(5), bronze, -0.9);                           // tail up
+      L2(0, -1.3, 1.85, 0.24, 0.24, 0.24, P.dodeca(), mane);                                // tail tuft
+      phys.addBox(x, z, 0.45, 0.95, yaw, top, top + 1.5, { tag: 'lion' });
+      info.fountainBig = { x, z, g, top: top + 2.2 };
+      continue;
+    }
+    const r = 3;
     const ring = circle(x, z, r, 16), inner = circle(x, z, r - 0.4, 16);
     batch.addTris(prismTris(ring, g, g + 0.6, false), 0xe8e0d0);
     batch.addTris(prismTris(ring, g + 0.55, g + 0.6, true), 0xf2ece0);
     batch.add(P.cyl(16), 0x4fb8d8, x, g + 0.35, z, (r - 0.4) * 2, 0.1, (r - 0.4) * 2);
     phys.add(ring, g, g + 0.6, { tag: 'fountain' });
     phys.add(inner, g, g + 0.3, { tag: 'fountainwater', solid: false });
-    if (big) {
-      // Fuente del León Ponceño (María Elena Perales): Ponce's golden lion standing on a red-brick
-      // bridge over the fountain, on a gray base. The lion is Ponce's symbol.
-      const yaw = 0.35, cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const at = (u, v) => [x + u * cy + v * sy, z - u * sy + v * cy];
-      batch.add(P.box(), 0x9a9a98, x, g + 0.45, z, 5.6, 0.5, 1.9, yaw);
-      const n = 9, span = 6.4, rise = 1.5;
-      for (let i = 0; i < n; i++) {
-        const u = (i + 0.5) / n - 0.5, h = 0.7 + rise * (1 - (2 * u) ** 2);
-        const [bx, bz] = at(u * span, 0);
-        batch.add(P.box(), i % 2 ? 0xb24a32 : 0xa3412c, bx, g + h / 2 + 0.2, bz, span / n + 0.02, h, 1.5, yaw);
-      }
-      const deckY = g + 0.2 + 0.7 + rise;
-      batch.add(P.box(), 0xd8d2c4, x, deckY + 0.06, z, 2.6, 0.12, 1.6, yaw);
-      phys.addBox(x, z, 1.3, 0.8, yaw, g, deckY + 0.12, { tag: 'bridge' });
-      for (const u of [-2.2, 2.2]) { const [bx, bz] = at(u, 0); phys.addBox(bx, bz, 1.0, 0.75, yaw, g, g + 0.2 + 0.7 + rise * 0.55, { tag: 'bridge' }); }
-      // the lion, standing proud
-      const gold = 0xe0b040, mane = 0xc98d2a;
-      // lion parts: u = side to side, v = nose to tail along the bridge
-      const L2 = (u, v, dy, sx, sy2, sz, prim = P.box(), col = gold, rx = 0, rz = 0) => {
-        const [lx, lz] = at(v, u);
-        batch.add(prim, col, lx, deckY + dy, lz, sx, sy2, sz, yaw + Math.PI / 2, rx, rz);
-      };
-      const ly = 0.12;
-      L2(0, 0, ly + 1.0, 0.9, 0.85, 1.9, P.sphere(10, 8));                         // body
-      for (const [u, v] of [[-0.28, 0.6], [0.28, 0.6], [-0.28, -0.6], [0.28, -0.6]]) L2(u, v, ly + 0.42, 0.26, 0.85, 0.26, P.cyl(6));
-      L2(0, 0.95, ly + 1.55, 1.25, 1.25, 1.0, P.dodeca(), mane);                   // mane
-      L2(0, 1.25, ly + 1.55, 0.62, 0.6, 0.6, P.sphere(8, 6));                       // face
-      L2(0, 1.52, ly + 1.45, 0.32, 0.24, 0.26, P.box());                            // muzzle
-      for (const u of [-0.18, 0.18]) L2(u, 1.5, ly + 1.66, 0.08, 0.08, 0.05, P.sphere(4, 3), 0x3a2a10);
-      L2(0, -1.05, ly + 1.2, 0.1, 0.1, 0.9, P.cyl(5), gold, 0.9);                    // tail
-      L2(0, -1.4, ly + 1.55, 0.26, 0.26, 0.26, P.dodeca(), mane);                   // tail tuft
-      phys.addBox(x, z, 0.5, 1.0, yaw + Math.PI / 2, deckY, deckY + 1.55, { tag: 'lion' });
-      info.fountainBig = { x, z, g, top: deckY + 2.3 };
-      continue;
-    }
     // tiered centerpiece
     const tiers = 2;
     let y = g;
@@ -751,17 +757,26 @@ function inPoly(x, z, pts) {
   return inside;
 }
 
+// the boardwalk's lamps are tall teal lattice towers (four posts tied with crossbars) with a
+// lamp head on two arms, standing on a concrete footing
 function lamp(batch, x, y, z, yaw) {
-  batch.add(P.box(), 0x8c8577, x, y + 0.12, z, 0.45, 0.24, 0.45);
-  batch.add(P.cyl(8), C.lamp, x, y + 1.1, z, 0.14, 2.0, 0.14);
-  batch.add(P.cyl(8), C.lamp, x, y + 0.35, z, 0.26, 0.5, 0.26);
-  batch.add(P.box(), C.lamp, x, y + 2.05, z, 0.9, 0.06, 0.06, yaw + Math.PI / 2);
-  for (const s of [-1, 1]) {
-    const lx = x + Math.cos(yaw + Math.PI / 2) * 0.42 * s, lz = z - Math.sin(yaw + Math.PI / 2) * 0.42 * s;
-    batch.add(P.frustum(1.4, 6), C.lampGlass, lx, y + 1.92, lz, 0.2, 0.3, 0.2);
-    batch.add(P.cone(6), C.lamp, lx, y + 2.14, lz, 0.28, 0.18, 0.28);
+  const H3 = 3.0, w = 0.18;
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const at = (u, v) => [x + u * c + v * s, z - u * s + v * c];
+  batch.add(P.box(), 0xb9b2a4, x, y + 0.14, z, 0.6, 0.28, 0.6, yaw);
+  for (const [u, v] of [[-w, -w], [w, -w], [w, w], [-w, w]]) {
+    const [px, pz] = at(u, v);
+    batch.add(P.box(), C.lamp, px, y + H3 / 2, pz, 0.07, H3, 0.07, yaw);
   }
-  batch.add(P.cone(8), C.lamp, x, y + 2.3, z, 0.18, 0.35, 0.18);
+  for (const hy of [0.7, 1.4, 2.1, 2.8]) batch.add(P.box(), C.lamp, x, y + hy, z, w * 2 + 0.08, 0.06, w * 2 + 0.08, yaw);
+  // two arms with lamp heads, and a cap on top
+  batch.add(P.box(), C.lamp, x, y + H3 - 0.1, z, 1.3, 0.06, 0.06, yaw);
+  for (const sgn of [-1, 1]) {
+    const [lx, lz] = at(sgn * 0.62, 0);
+    batch.add(P.frustum(1.4, 6), C.lampGlass, lx, y + H3 - 0.28, lz, 0.2, 0.3, 0.2);
+    batch.add(P.cone(6), 0x6d7478, lx, y + H3 - 0.05, lz, 0.32, 0.16, 0.32);
+  }
+  batch.add(P.cone(4), C.lamp, x, y + H3 + 0.15, z, 0.34, 0.3, 0.34, yaw + Math.PI / 4);
 }
 
 function frondGeo() {
@@ -865,7 +880,7 @@ function groundMap(data) {
   // clean game colors, with a little of the photo's detail still showing through
   g.globalAlpha = 0.8;
   fill(data.world.wetland, '#748867');
-  fill(data.world.park, '#75a65c');
+  fill(data.world.park, '#98a064'); // Ponce's dry south coast: the park is more sunburnt than lush
   fill(data.world.beach, '#dec797');
   g.globalAlpha = 0.9;
   fill(data.world.parking, '#999997');
