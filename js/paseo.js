@@ -160,8 +160,16 @@ export function buildPaseoStreet({ data, batch, phys, H, info, palm, broadTree, 
     }
     for (const u of [-0.32, 0.32]) {
       const bx = x + ux * u * len / S, bz = z + uz * u * len / S;
-      if (R() < 0.5) batch.add(P.ico(0), [0xe0457b, 0xf2a93b, 0xd84a3a][Math.floor(R() * 3)], bx, g + hgt + 0.35, bz, 0.9, 0.6, 0.8, R() * 6, 0, 0, 0.2);
-      else bush(bx, g + hgt, bz, 0.9 + R() * 0.3);
+      // a leafy shrub, some dotted with hibiscus or ixora blossoms
+      const bs = 0.8 + R() * 0.3;
+      bush(bx, g + hgt, bz, bs);
+      if (R() < 0.6) {
+        const col = [0xe0457b, 0xf2a93b, 0xd84a3a, 0xf06a9a][Math.floor(R() * 4)];
+        for (let q = 0; q < 5; q++) {
+          const a = R() * 6.28, r = R() * bs * 0.4;
+          batch.add(P.sphere(6, 4), col, bx + Math.cos(a) * r, g + hgt + bs * 0.55 + R() * 0.1, bz + Math.sin(a) * r, 0.16, 0.12, 0.16);
+        }
+      }
     }
     if (!trunkNear(x, z, 2.2)) palm(x + ux * (R() - 0.5) * 2, g + hgt, z + uz * (R() - 0.5) * 2, 4.2 + R() * 1.6);
     // a bench in the gap after the planter, facing the paseo

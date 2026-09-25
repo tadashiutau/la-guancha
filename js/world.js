@@ -9,7 +9,7 @@ import { buildPaseoStreet, paseoFrame, PASEO_W } from './paseo.js';
 const C = {
   // colors from photos of the real boardwalk: cream-yellow railings, lavender kiosks with white
   // trim and sea-green roofs, a pale tower with yellow wooden walkways
-  deck: 0x9d978a, deck2: 0x8f897d, rail: 0xe6d49a, piling: 0x5a4636,
+  deck: 0x9d978a, deck2: 0x7e7064, rail: 0xe6d49a, timber: 0x7a4a32, timber2: 0x6a3f2a, piling: 0x5a4636,
   lamp: 0x2f7f76, lampGlass: 0xfff3c4, planter: 0xb9ae9c, shrub: 0x3f8f4a,
   kioskWalls: [0x9d97d6, 0x8494da, 0xa99ad8, 0x8fa0dc], kioskTrim: 0xf6f4ee, kioskRoof: 0x3a9a86, window: 0x3b4b5a,
   towerWood: 0xdcc684, towerCore: 0xebe8e0, towerRoof: 0x3a9a86,
@@ -53,6 +53,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
   // ---------------------------------------------------------------- boardwalk
   const tab = W.tablado.map(wpts);
   info.tablado = tab;
+  const deckQuads = [];
   const DW = 7 * S; // deck width
   for (const line of tab) {
     // deck height from the land behind it
@@ -78,21 +79,18 @@ export function buildWorld(scene, data, phys, { mobile }) {
       const cx = mx + nx * off, cz = mz + nz * off;
       const yaw = Math.atan2(-uz, ux);
       phys.addBox(cx, cz, len / 2 + 0.3, DW / 2, yaw, y - 0.35, y, { tag: 'deck' });
-      // planks
-      const n = Math.max(1, Math.round(len / (1.3 * S)));
-      for (let k = 0; k < n; k++) {
-        const t = (k + 0.5) / n;
-        batch.add(P.box(), k % 2 ? C.deck : C.deck2, ax + dx * t + nx * off, y - 0.12, az + dz * t + nz * off,
-          len / n + 0.02, 0.24, DW, yaw, 0, 0, 0.06);
-      }
-      // railing on the water side, lamps and planters on the land side
+      // the deck body; its top gets the chevron plank texture (deckTop, below)
+      batch.add(P.box(), C.deck2, cx, y - 0.13, cz, len + 0.02, 0.24, DW, yaw);
+      deckQuads.push([ax + nx * off, az + nz * off, bx + nx * off, bz + nz * off, nx, nz, y]);
+      // brown timber railing on the water side: sturdy posts, three rails and a wide flat cap
       const rx = nx * (off + DW / 2 - 0.08), rz = nz * (off + DW / 2 - 0.08);
-      const posts = Math.max(1, Math.round(len / (2.2 * S)));
+      const posts = Math.max(1, Math.round(len / (1.6 * S)));
       for (let k = 0; k <= posts; k++) {
         const t = k / posts;
-        batch.add(P.box(), C.rail, ax + dx * t + rx, y + 0.33, az + dz * t + rz, 0.14, 0.66, 0.14, yaw);
+        batch.add(P.box(), C.timber, ax + dx * t + rx, y + 0.33, az + dz * t + rz, 0.13, 0.66, 0.13, yaw);
       }
-      for (const hy of [0.34, 0.62]) batch.add(P.box(), C.rail, mx + rx, y + hy, mz + rz, len + 0.1, 0.07, 0.1, yaw);
+      for (const hy of [0.18, 0.36, 0.54]) batch.add(P.box(), C.timber2, mx + rx, y + hy, mz + rz, len + 0.1, 0.09, 0.05, yaw);
+      batch.add(P.box(), C.timber, mx + rx, y + 0.69, mz + rz, len + 0.12, 0.05, 0.2, yaw);
       phys.addBox(mx + rx, mz + rz, len / 2, 0.12, yaw, y, y + 0.66, { tag: 'rail', ground: true });
       // pilings under the deck, visible from the water
       for (let k = 0; k <= Math.round(len / (4 * S)); k++) {
@@ -154,13 +152,44 @@ export function buildWorld(scene, data, phys, { mobile }) {
     if (isKiosk) {
       const eave = base + 3.1 * S * 1.15;
       const rect = rectPts(cx, cz, hx, hz, rang);
-      batch.addTris(prismTris(rect, base - 0.3, eave, false), C.kioskWalls[info.kiosks.length % C.kioskWalls.length]);
-      // trim band and dark serving windows all around
-      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.02, hz + 0.02, rang), eave - 0.18, eave, false), C.kioskTrim);
+      // each kiosk gets one of the real color schemes (Street View): salmon stucco with cream trim,
+      // maroon boards with a green base, turquoise, butter yellow...
+      const sc = KIOSK_SCHEMES[info.kiosks.length % KIOSK_SCHEMES.length];
+      batch.addTris(prismTris(rect, base - 0.3, eave, false), sc.wall);
+      // trim band and dark windows all around, a base band, cream pilasters
+      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.02, hz + 0.02, rang), eave - 0.18, eave, false), sc.trim);
       batch.addTris(prismTris(rectPts(cx, cz, hx + 0.03, hz * 0.7, rang), base + 0.75, base + 1.45, false), C.window);
       batch.addTris(prismTris(rectPts(cx, cz, hx * 0.8, hz + 0.03, rang), base + 0.75, base + 1.45, false), C.window);
-      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.05, hz + 0.05, rang), base + 0.72, base + 0.8, false), C.kioskTrim);
-      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, rang), base - 0.3, base + 0.35, false), 0xc2b27a); // khaki base band
+      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.05, hz + 0.05, rang), base + 0.72, base + 0.8, false), sc.trim);
+      batch.addTris(prismTris(rectPts(cx, cz, hx + 0.04, hz + 0.04, rang), base - 0.3, base + 0.35, false), sc.base);
+      const kc = Math.cos(rang), ks = Math.sin(rang);
+      const kat = (u, v) => [cx + u * kc + v * ks, cz - u * ks + v * kc];
+      for (const [su, sv] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const [px, pz] = kat(su * (hx + 0.04), sv * (hz + 0.04));
+        batch.add(P.box(), sc.trim, px, (base + eave) / 2 - 0.15, pz, 0.2, eave - base + 0.3, 0.2, rang);
+      }
+      // louvered shutters beside the windows on the long sides
+      const long = hx >= hz;
+      const lenK = long ? hx : hz, depK = long ? hz : hx;
+      for (let u = -lenK + 0.9; u < lenK - 0.5; u += 1.5) for (const sv of [-1, 1]) {
+        const [px, pz] = long ? kat(u, sv * (depK + 0.06)) : kat(sv * (depK + 0.06), u);
+        batch.add(P.box(), sc.shutter, px, base + 1.1, pz, long ? 0.34 : 0.06, 0.66, long ? 0.06 : 0.34, rang);
+      }
+      // a green door with a cream frame on the side facing away from the boardwalk
+      {
+        let best = null;
+        for (const [u, v] of [[hx, 0], [-hx, 0], [0, hz], [0, -hz]]) {
+          const [px, pz] = kat(u * 1.02, v * 1.02);
+          const d = Math.min(...tab.map(l => polyDist(px, pz, l)));
+          if (!best || d > best.d) best = { d, u, v };
+        }
+        const side = best.u ? 'u' : 'v', sg = Math.sign(best.u || best.v);
+        const off = (side === 'u' ? hx : hz) + 0.05;
+        const [dx, dz] = side === 'u' ? kat(sg * off, 0) : kat(0, sg * off);
+        const w = side === 'u' ? [0.08, 1.2] : [1.2, 0.08];
+        batch.add(P.box(), sc.trim, dx, base + 0.95, dz, w[0] + (side === 'u' ? 0 : 0.2), 1.9, w[1] + (side === 'u' ? 0.2 : 0), rang);
+        batch.add(P.box(), 0x2f6b4a, dx, base + 0.85, dz, w[0] + 0.02, 1.7, w[1] + 0.02, rang);
+      }
       const slope = 0.55, cap = 1.4;
       batch.addTris(hipRoofTris(cx, cz, hx, hz, rang, eave, slope, cap, 0.45), C.kioskRoof);
       phys.add(rectPts(cx, cz, hx + 0.45, hz + 0.45, rang), eave - 0.3, eave, { tag: 'roof', roof: slope, cap });
@@ -516,21 +545,32 @@ export function buildWorld(scene, data, phys, { mobile }) {
   }
 
   // leafy greens, picked per blob so groves aren't one flat color
+  const PARK_LEAF = [0x7ba64a, 0x86ad52, 0x6f9c44, 0x92b45a, 0x7fa044];
   const LEAF = [0x3f8a3c, 0x4a9440, 0x5aa446, 0x367a34, 0x66a848, 0x2f7436, 0x78b04c];
   const leaf = () => LEAF[Math.floor(R() * LEAF.length)];
+
+  scene.add(deckTop(deckQuads, DW));
 
   // ---------------------------------------------------------------- trees (LiDAR)
   const tops = [];
   // no trees inside the fountains (they're built later)
   const fountains = W.poi.filter(p => p.t.amenity === 'fountain').map(p => [p.p[0] * S, -p.p[1] * S]);
   const inFountain = (x, z) => fountains.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8);
+  // the park's trees are fewer and airier than the LiDAR crowns suggest (Street View 2025)
+  const parks = W.park.map(wpts);
+  const inPark = (x, z) => parks.some(p => inPoly(x, z, p));
+  const parkTops = [];
   for (const [x, y, h, rad, kind] of W.trees) {
     const px = x * S, pz = -y * S, g = H(px, pz);
     if (g < 0.1 || inFountain(px, pz)) continue;
     if (phys.near(px, pz, 0.5).some(c => c.tag === 'kiosk' || c.tag === 'bld' || c.tag === 'deck')) continue;
     const hh = Math.min(h, 16) * S;
     let top;
-    if (kind === 'palm') top = palm(px, g, pz, hh);
+    if (kind !== 'palm' && inPark(px, pz)) {
+      if (parkTops.some(([qx, qz]) => Math.hypot(qx - px, qz - pz) < 5.5)) continue;
+      parkTops.push([px, pz]);
+      top = parkTree(px, g, pz, hh, Math.min(rad, 5) * S);
+    } else if (kind === 'palm') top = palm(px, g, pz, hh);
     else if (kind === 'mangrove') top = mangrove(px, g, pz, Math.min(hh, 4), rad * S);
     else top = broadTree(px, g, pz, hh, Math.min(rad, 5.5) * S);
     tops.push([px, pz, kind, top]);
@@ -568,7 +608,7 @@ export function buildWorld(scene, data, phys, { mobile }) {
         const g = H(jx, jz);
         if (g < 0.2 || near(jx, jz) || inFountain(jx, jz)) continue;
         if (phys.near(jx, jz, 1.2).some(c => c.solid || c.tag === 'deck')) continue;
-        if (onRoad(jx, jz)) continue;
+        if (onRoad(jx, jz) || inPark(jx, jz)) continue;
         taken.set(key(jx, jz), true);
         const h = Math.min(ch, 14) * S * (0.85 + R() * 0.3);
         if (wet.some(p => inPoly(jx, jz, p))) mangrove(jx, g, jz, Math.min(h, 4), 1.4 + R() * 0.6);
@@ -642,6 +682,33 @@ export function buildWorld(scene, data, phys, { mobile }) {
     return cy + r * 0.45;
   }
 
+  // a park tree: thin trunk forking into a few branches under an airy umbrella of small, light
+  // green clumps with sky showing between them
+  function parkTree(x, g, z, h, r) {
+    r = Math.max(1.6, Math.min(r, 3));
+    const fork = g + 1.1 + R() * 0.4;
+    const cy = Math.max(g + 2.7, Math.min(g + h * 0.75, g + 3.8));
+    const lean = (R() - 0.5) * 0.25, ld = R() * 6.28;
+    batch.add(P.frustum(0.7, 6), C.trunk, x, (g + fork) / 2, z, 0.26, fork - g, 0.26, 0, Math.sin(ld) * lean, -Math.cos(ld) * lean);
+    const tree = { x, y: cy, z, radius: r * 1.1, opacity: 1, pieces: [], refs: [] };
+    foliageTrees.push(tree);
+    const n = 4 + (R() < 0.5 ? 1 : 0), a0 = R() * 6.28;
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i / n * Math.PI * 2 + (R() - 0.5) * 0.6, d = r * (0.35 + R() * 0.2);
+      const bx = x + Math.cos(a) * d, bz = z + Math.sin(a) * d, by = cy - 0.1 + (R() - 0.5) * 0.4;
+      // branch from the fork out to the clump
+      const len = Math.hypot(d, by - fork), tilt = Math.atan2(d, by - fork);
+      batch.add(P.cyl(4), C.trunk, (x + bx) / 2, (fork + by) / 2, (z + bz) / 2, 0.12, len, 0.12, 0, Math.sin(a) * tilt, -Math.cos(a) * tilt);
+      tree.pieces.push({ kind: 'leaf', color: PARK_LEAF[Math.floor(R() * PARK_LEAF.length)], x: bx, y: by + 0.25, z: bz,
+        sx: r * (0.75 + R() * 0.2), sy: r * 0.62, sz: r * (0.75 + R() * 0.2), yaw: R() * 6 });
+    }
+    tree.pieces.push({ kind: 'leaf', color: PARK_LEAF[Math.floor(R() * PARK_LEAF.length)], x, y: cy + 0.55, z,
+      sx: r * 0.95, sy: r * 0.6, sz: r * 0.95, yaw: R() * 6 });
+    phys.addBox(x, z, 0.16, 0.16, 0, g - 0.5, fork, { tag: 'trunk', ground: false });
+    phys.add(circle(x, z, r * 0.9, 7), cy - 0.1, cy + 0.7, { tag: 'canopy', solid: false });
+    return cy + 0.7;
+  }
+
   // mangroves: a knot of arching prop roots under a low, dense, dark crown
   function mangrove(x, g, z, h, r) {
     r = Math.max(1.2, r);
@@ -709,11 +776,23 @@ export function buildWorld(scene, data, phys, { mobile }) {
       const ux = (bx - ax) / len, uz = (bz - az) / len, nx = -uz, nz = ux;
       const stall = 1.65, depth = 3.0, edge = aisle.hw + 0.1;
       for (const side of [-1, 1]) {
+        let k = 0;
         for (let d = 1.5; d + 1.5 < len; d += stall) {
           const cx = ax + ux * d + nx * side * (edge + depth / 2), cz = az + uz * d + nz * side * (edge + depth / 2);
           if (!inPoly(cx, cz, lot) || distToRoad(cx, cz, aisle) < 1.7) continue;
           if (phys.near(cx, cz, 1.6).some(c => c.solid && c.tag !== 'deck')) continue;
           const g = H(cx, cz);
+          // a raised planter island at the start of each row and every 12th space, some with a
+          // shade tree (the real lots have low stone planters and sparse trees)
+          if (k++ % 12 === 0) {
+            const yawI = Math.atan2(-nz, nx);
+            batch.add(P.box(), 0xd2c8b4, cx, g + 0.15, cz, depth - 0.2, 0.3, stall - 0.15, yawI);
+            batch.add(P.box(), 0x8a9a52, cx, g + 0.31, cz, depth - 0.45, 0.03, stall - 0.4, yawI);
+            phys.addBox(cx, cz, (depth - 0.2) / 2, (stall - 0.15) / 2, yawI, g - 0.2, g + 0.3, { tag: 'planter' });
+            if (k % 24 === 1) parkTree(cx, g + 0.3, cz, 6 * S, 2.4 * S);
+            else bush(cx, g + 0.3, cz, 0.8);
+            continue;
+          }
           // stall line on the near side of this space
           const lx = cx - ux * stall / 2, lz = cz - uz * stall / 2;
           batch.add(P.box(), 0xf2f2ee, lx, g + 0.1, lz, depth, 0.02, 0.09, Math.atan2(-nz, nx));
@@ -878,6 +957,65 @@ function lamp(batch, x, y, z, yaw) {
   batch.add(P.cone(4), C.lamp, x, y + H3 + 0.15, z, 0.34, 0.3, 0.34, yaw + Math.PI / 4);
 }
 
+const KIOSK_SCHEMES = [
+  { wall: 0xe89a88, trim: 0xecd9a0, base: 0xcdb27a, shutter: 0x2f6b4a }, // salmon stucco, cream trim
+  { wall: 0xa0404a, trim: 0xf0e6cc, base: 0x3f7a5a, shutter: 0x8a3440 }, // maroon boards, green base
+  { wall: 0x5fbfc0, trim: 0xf4f2ea, base: 0x9aa3a0, shutter: 0x2f6b8a }, // turquoise
+  { wall: 0xe8c872, trim: 0xf4f0e0, base: 0x3f7a5a, shutter: 0xb8453a }, // butter yellow
+  { wall: 0x9d97d6, trim: 0xf6f4ee, base: 0xc2b27a, shutter: 0x5f58a8 }, // lavender
+  { wall: 0xf0b890, trim: 0xf4ecd8, base: 0xa0404a, shutter: 0x2f6b4a }, // peach, red base
+];
+
+// The boardwalk's top: weathered planks laid in a chevron that meets along the middle (as in
+// Street View), one merged mesh with a tiling canvas texture.
+function deckTop(quads, DW) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext('2d');
+  const img = g.createImageData(512, 512);
+  const W = [[138, 124, 110], [126, 112, 100], [150, 136, 120], [118, 106, 96], [142, 126, 108], [132, 120, 112]];
+  const hash = i => { let h = Math.imul(i, 2654435761) >>> 0; h = (h ^ (h >>> 15)) >>> 0; return h % 997; };
+  const PW = 16; // plank width in pixels (the tile is one deck-width square)
+  for (let py = 0; py < 512; py++) for (let px = 0; px < 512; px++) {
+    // across the deck (py): each half slants the other way
+    const s = py < 256 ? px + py : px + 512 - py;
+    const idx = Math.floor(s / PW), along = s % PW;
+    const m = ((idx % 32) + 32) % 32;
+    // plank ends staggered along each plank
+    const run = py < 256 ? px - py : px + py;
+    const joint = (((run + hash(m) * 7) % 180) + 180) % 180 < 2;
+    const col = W[hash(m) % W.length];
+    const grain = Math.sin((run + m * 13) * 0.35) * 4 + (hash(m * 31 + (run >> 3)) % 9) - 4;
+    const gap = along < 1 || joint || Math.abs(py - 255.5) < 1.2;
+    const o = (py * 512 + px) * 4;
+    const k = gap ? 0.55 : 1;
+    img.data[o] = (col[0] + grain) * k; img.data[o + 1] = (col[1] + grain) * k; img.data[o + 2] = (col[2] + grain) * k; img.data[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const pos = [], uv = [];
+  let u0 = 0;
+  for (const [ax, az, bx, bz, nx, nz, y] of quads) {
+    const len = Math.hypot(bx - ax, bz - az), u1 = u0 + len / DW;
+    const h = DW / 2, yy = y + 0.002;
+    const A = [ax - nx * h, yy, az - nz * h], B = [ax + nx * h, yy, az + nz * h];
+    const Cc = [bx - nx * h, yy, bz - nz * h], D = [bx + nx * h, yy, bz + nz * h];
+    pos.push(...A, ...Cc, ...B, ...B, ...Cc, ...D);
+    uv.push(u0, 0, u1, 0, u0, 1, u0, 1, u1, 0, u1, 1);
+    u0 = u1 % 1;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }));
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
 // Puerto Rican flag hung vertically on a face of the given width/height ratio
 function flagTexture(aspect) {
   const c = document.createElement('canvas');
@@ -1005,7 +1143,30 @@ function groundMap(data) {
   // clean game colors, with a little of the photo's detail still showing through
   g.globalAlpha = 0.8;
   fill(data.world.wetland, '#748867');
-  fill(data.world.park, '#98a064'); // Ponce's dry south coast: the park is more sunburnt than lush
+  // Ponce's dry south coast: the park is dusty tan ground with patches of dry grass (Street View 2025)
+  g.globalAlpha = 0.95;
+  fill(data.world.park, '#d0b78c');
+  {
+    g.save();
+    g.beginPath();
+    for (const poly of data.world.park) poly.forEach(([x, y], i) => i ? g.lineTo(x - f.x0, f.y1 - y) : g.moveTo(x - f.x0, f.y1 - y));
+    g.clip();
+    let sd = 11;
+    const rr = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    const xs = data.world.park.flat().map(p => p[0]), ys = data.world.park.flat().map(p => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const n = Math.round((x1 - x0) * (y1 - y0) / 25);
+    for (let i = 0; i < n; i++) {
+      const x = x0 + rr() * (x1 - x0), y = y0 + rr() * (y1 - y0);
+      g.globalAlpha = 0.12 + rr() * 0.22;
+      g.fillStyle = ['#9a9a5c', '#a8a46a', '#8f9456', '#b39b6e'][Math.floor(rr() * 4)];
+      g.beginPath();
+      g.ellipse(x - f.x0, f.y1 - y, 1.5 + rr() * 5, 1 + rr() * 3.5, rr() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+    g.globalAlpha = 0.8;
+  }
   fill(data.world.beach, '#dec797');
   g.globalAlpha = 0.9;
   fill(data.world.parking, '#999997');

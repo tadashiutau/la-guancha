@@ -19,9 +19,12 @@ const mobile = /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigator.ma
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile || devicePixelRatio < 2, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 2 : 1.75));
+// resolution scale: starts at the device's cap and adapts to the frame rate (see adaptRes)
+const MAX_RES = Math.min(devicePixelRatio, 1.75), MIN_RES = Math.min(devicePixelRatio, 0.85);
+let res = mobile ? Math.min(MAX_RES, 1.5) : MAX_RES;
+renderer.setPixelRatio(res);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = mobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 const FOG = new THREE.Color(0xcfe6f2), UNDER = new THREE.Color(0x0f6f8f);
@@ -155,9 +158,25 @@ ui.onLang = () => { setLang(getLang() === 'es' ? 'en' : 'es'); ui.applyLang(); g
 // ------------------------------------------------------------------ loop
 const clock = new THREE.Clock();
 let fpsT = performance.now(), fpsN = 0;
+// Adaptive resolution: every 2 s of play, drop the render scale when frames run slow and raise it
+// again when there's headroom, so phones and tablets stay smooth without a settings menu.
+let resT = performance.now(), resN = 0;
+function adaptRes() {
+  resN++;
+  const el = performance.now() - resT;
+  if (el < 2000) return;
+  const fps = resN * 1000 / el;
+  resN = 0; resT = performance.now();
+  if (document.hidden || state !== 'play') return;
+  let next = res;
+  if (fps < 45) next = Math.max(MIN_RES, res - 0.25);
+  else if (fps > 58) next = Math.min(MAX_RES, res + 0.125);
+  if (next !== res) { res = next; renderer.setPixelRatio(res); resize(); }
+}
 function frame() {
   requestAnimationFrame(frame);
   if (!game) return;
+  adaptRes();
   let dt = Math.min(clock.getDelta(), 1 / 20);
   const now = performance.now() / 1000;
   const inp = input.frame();

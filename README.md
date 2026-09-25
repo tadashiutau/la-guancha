@@ -2,7 +2,7 @@
 
 A small Super Mario Odyssey–style 3D exploration game set on the **Paseo Tablado La Guancha** in Ponce, Puerto Rico. It's built from real map data and runs in the browser on iPhone, Android tablets and desktop. The in-game text is Spanish first, with an English toggle.
 
-Collect **28 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around.
+Collect **29 vejigante masks**, 50 conch shells and lots of chavos. Along the way you can triple jump, backflip, long jump, ground pound, wall jump, dive, swim, and throw your pava (then bounce on it). Find Moth, a black cat in a box at the park who is greedy for pets: pet her, get her a Churu back from a thieving pelican, and she flies to the Moon to bring you a gift. Afterwards she can follow you around.
 
 ## Play it
 

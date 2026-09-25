@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { S } from './data.js';
 import { P, rng } from './geo.js';
+import { paseoFrame } from './paseo.js';
 
 const L = (x, y) => [x * S, -y * S];
 
@@ -303,31 +304,92 @@ export function buildProps(g, props) {
     }
     return c;
   };
-  for (const park of data.world.park) {
-    const pts = park.map(([x, y]) => L(x, y));
+  // a run of wall pieces along a polygon's edges, offset `off` inward (+) or outward (-)
+  const paseoF = paseoFrame(data);
+  const footDist = (x, z) => Math.min(...foot.map(l => Math.min(...l.slice(1).map((q, j) => segD(x, z, l[j], q)))));
+  const stoneWall = (pts, off, { avoidFoot = false, skip = () => false } = {}) => {
     for (let i = 0; i < pts.length; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
       const len = Math.hypot(bx - ax, bz - az);
       if (len < 0.5) continue;
-      // sit the wall just inside the park, off the sidewalk
       let nx = -(bz - az) / len, nz = (bx - ax) / len;
       if (!inside((ax + bx) / 2 + nx, (az + bz) / 2 + nz, pts)) { nx = -nx; nz = -nz; }
       const n = Math.max(1, Math.round(len / 1.6)), yaw = Math.atan2(-(bz - az), bx - ax);
+      // (only paths that cut across the wall open a gap, not the ones running alongside it)
+      const across = (a2, b2) => {
+        const lx = b2[0] - a2[0], lz = b2[1] - a2[1], ll = Math.hypot(lx, lz) || 1;
+        return Math.abs((lx * (bx - ax) + lz * (bz - az)) / (ll * len)) < 0.8;
+      };
       for (let k = 0; k < n; k++) {
         const t0 = k / n, t1 = (k + 1) / n;
-        const p0 = [ax + (bx - ax) * t0 + nx * 0.7, az + (bz - az) * t0 + nz * 0.7];
-        const p1 = [ax + (bx - ax) * t1 + nx * 0.7, az + (bz - az) * t1 + nz * 0.7];
+        const p0 = [ax + (bx - ax) * t0 + nx * off, az + (bz - az) * t0 + nz * off];
+        const p1 = [ax + (bx - ax) * t1 + nx * off, az + (bz - az) * t1 + nz * off];
         const x = (p0[0] + p1[0]) / 2, z = (p0[1] + p1[1]) / 2;
         // a gap wherever a path or road comes in (and a little either side of it)
         const ext = [[p0[0] - (bx - ax) / len * 1.2, p0[1] - (bz - az) / len * 1.2], [p1[0] + (bx - ax) / len * 1.2, p1[1] + (bz - az) / len * 1.2]];
-        if (lanes.some(l => l.some((q, j) => j && cross(ext[0], ext[1], l[j - 1], q)))) continue;
-        if (nearRoad(x, z, -0.7)) continue;
-        if (phys.near(x, z, 0.8).some(c => c.solid && c.tag !== 'deck' && phys.sdist(c, x, z).d < 0.4)) continue;
+        if (lanes.some(l => l.some((q, j) => j && across(l[j - 1], q) && cross(ext[0], ext[1], l[j - 1], q)))) continue;
+        if (nearRoad(x, z, -0.7) || skip(x, z)) continue;
+        if (avoidFoot && footDist(x, z) < 1.3) continue;
+        if (paseoF && paseoF.project(x, z).d < paseoF.half + 1) continue;
+        if (phys.near(x, z, 0.8).some(c => c.solid && c.tag !== 'deck' && c.tag !== 'wall' && phys.sdist(c, x, z).d < 0.4)) continue;
         const y = H(x, z);
         if (y < 0.3) continue;
         box(0xd2c8b4, x, y + 0.27, z, len / n + 0.02, 0.54, 0.4, yaw);
         box(0xe4ddcf, x, y + 0.57, z, len / n + 0.06, 0.07, 0.48, yaw);
         solid(x, z, len / n / 2, 0.2, yaw, y - 0.2, y + 0.6, 'wall');
+      }
+    }
+  };
+  // the park: on the inner side of the path that runs around it
+  for (const park of data.world.park) stoneWall(park.map(([x, y]) => L(x, y)), 1.9);
+  // the parking lots: bordered by the same low walls toward the green strips around them
+  const lotPolys = data.world.parking.map(l => l.map(([x, y]) => L(x, y)));
+  for (const lot of lotPolys) stoneWall(lot, -0.9, { avoidFoot: true, skip: (x, z) => lotPolys.some(o => o !== lot && inside(x, z, o)) });
+
+  // ---------------------------------------------------------------- park entrances and lamps
+  // three short stone bollards across each path where it enters the park, and tall green lamp
+  // posts with a round globe along the paths inside (Street View 2025)
+  for (const park of data.world.park) {
+    const pts = park.map(([x, y]) => L(x, y));
+    for (const l of foot) for (let j = 1; j < l.length; j++) {
+      const [ax, az] = l[j - 1], [bx, bz] = l[j];
+      for (let i = 0; i < pts.length; i++) {
+        const c2 = pts[i], d = pts[(i + 1) % pts.length];
+        if (!cross([ax, az], [bx, bz], c2, d)) continue;
+        // where the path crosses the park edge
+        const ex = bx - ax, ez = bz - az, fx = d[0] - c2[0], fz = d[1] - c2[1];
+        const den = ex * fz - ez * fx;
+        if (Math.abs(den) < 1e-6) continue;
+        const k = ((c2[0] - ax) * fz - (c2[1] - az) * fx) / den;
+        const len = Math.hypot(ex, ez), ux = ex / len, uz = ez / len;
+        // step inside the park a little, past the wall line
+        const sgn = inside(ax + ex * k + ux, az + ez * k + uz, pts) ? 1 : -1;
+        const cx = ax + ex * k + ux * sgn * 1.1, cz = az + ez * k + uz * sgn * 1.1;
+        for (const o of [-0.8, 0, 0.8]) {
+          const x = cx - uz * o, z = cz + ux * o, y = H(x, z);
+          if (y < 0.3 || phys.near(x, z, 0.3).some(c => c.solid)) continue;
+          props.add(P.cyl(8), 0xcfc4a8, x, y + 0.3, z, 0.26, 0.6, 0.26);
+          props.add(P.cyl(8), 0xb8ab8c, x, y + 0.62, z, 0.3, 0.06, 0.3);
+          solid(x, z, 0.13, 0.13, 0, y - 0.2, y + 0.65, 'bollard');
+        }
+      }
+    }
+    // lamps every ~18 units along the paths inside
+    let run = 9;
+    for (const l of foot) for (let j = 1; j < l.length; j++) {
+      const [ax, az] = l[j - 1], [bx, bz] = l[j];
+      const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+      for (let d = 0; d < len; d += 1) {
+        if ((run += 1) < 18) continue;
+        const x = ax + ux * d + uz * 1.3, z = az + uz * d - ux * 1.3;
+        if (!inside(x, z, pts) || H(x, z) < 0.3 || phys.near(x, z, 0.6).some(c => c.solid)) continue;
+        run = 0;
+        const y = H(x, z), h = 4.4;
+        props.add(P.cyl(8), 0x245e40, x, y + 0.25, z, 0.3, 0.5, 0.3);
+        props.add(P.cyl(6), 0x2f7a52, x, y + h / 2, z, 0.12, h, 0.12);
+        props.add(P.sphere(10, 8), 0xf6f2e0, x, y + h + 0.2, z, 0.5, 0.5, 0.5);
+        props.add(P.cyl(8), 0x245e40, x, y + h - 0.03, z, 0.26, 0.08, 0.26);
+        solid(x, z, 0.12, 0.12, 0, y, y + h, 'lamp');
       }
     }
   }
@@ -337,34 +399,47 @@ export function buildProps(g, props) {
   // red doors at the foot of the tower (as in Street View)
   const tw = info.tower;
   if (tw) {
-    const pergola = (x, z, yaw, hx, hz) => {
+    // one designed square: brick pavers from the tower to the front of the last kiosk
+    const ksAll = info.kiosks.slice();
+    const sk = ksAll.sort((a, b) => Math.hypot(a.x - tw.x, a.z - tw.z) - Math.hypot(b.x - tw.x, b.z - tw.z))[0];
+    const fl = sk && sk.front ? Math.hypot(sk.front.nx, sk.front.nz) || 1 : 1;
+    const fnx = sk?.front ? sk.front.nx / fl : 0, fnz = sk?.front ? sk.front.nz / fl : 0;
+    const spots2 = [[tw.x, tw.z, 12]];
+    if (sk) spots2.push([(sk.x + tw.x) / 2, (sk.z + tw.z) / 2, 12], [sk.x, sk.z, 13], [sk.x - fnx * 7, sk.z - fnz * 7, 9]);
+    const keepP = (x, z) => H(x, z) > 0.3 && !nearRoad(x, z, -0.4);
+    keepP.h = H;
+    g.scene.add(paverPlaza(spots2, keepP));
+    // a big pergola grid (posts on pale stone footings) over picnic tables, like the real one
+    const pergola = (x, z, yaw, hx, hz, grid = false) => {
       const y = H(x, z);
       const nx2 = Math.max(2, Math.round(hx / 1.6)), nz2 = Math.max(2, Math.round(hz / 1.6));
       for (let i = 0; i <= nx2; i++) for (let j = 0; j <= nz2; j++) {
-        if (i && j && i < nx2 && j < nz2) continue; // posts only around the edge
+        if (!grid && i && j && i < nx2 && j < nz2) continue; // posts only around the edge
         const [px, pz] = rot(x, z, yaw, -hx + 2 * hx * i / nx2, -hz + 2 * hz * j / nz2);
-        box(0xb9b2a4, px, y + 0.25, pz, 0.36, 0.5, 0.36, yaw);
-        box(0x1f4a36, px, y + 1.6, pz, 0.18, 2.3, 0.18, yaw);
+        box(0xd8d0c0, px, y + 0.3, pz, 0.38, 0.6, 0.38, yaw);
+        box(0x1f5a40, px, y + 1.65, pz, 0.18, 2.2, 0.18, yaw);
         solid(px, pz, 0.12, 0.12, yaw, y, y + 2.75, 'post');
       }
-      for (let i = 0; i <= nx2 * 2; i++) { const [px, pz] = rot(x, z, yaw, -hx + hx * i / nx2, 0); box(0x1f4a36, px, y + 2.8, pz, 0.12, 0.14, hz * 2 + 0.4, yaw); }
-      for (const v of [-hz, hz]) { const [px, pz] = rot(x, z, yaw, 0, v); box(0x1f4a36, px, y + 2.7, pz, hx * 2 + 0.4, 0.18, 0.18, yaw); }
+      for (let i = 0; i <= nx2 * 2; i++) { const [px, pz] = rot(x, z, yaw, -hx + hx * i / nx2, 0); box(0x1f5a40, px, y + 2.8, pz, 0.12, 0.14, hz * 2 + 0.4, yaw); }
+      for (let j = 0; j <= nz2; j++) { const [px, pz] = rot(x, z, yaw, 0, -hz + 2 * hz * j / nz2); box(0x1f5a40, px, y + 2.7, pz, hx * 2 + 0.4, 0.18, 0.18, yaw); }
       phys.addBox(x, z, hx, hz, yaw, y + 2.65, y + 2.9, { tag: 'pergola' });
     };
-    const yawT2 = R() * 0.3;
-    for (const [dx, dz] of [[7, 3], [-6, 6], [3, 9]]) {
-      const sp = freeSpot(tw.x + dx, tw.z + dz, 3.4, 12);
-      if (sp) pergola(sp[0], sp[1], yawT2, 3.0, 2.2);
-    }
-    for (let i = 0; i < 3; i++) {
-      const sp = freeSpot(tw.x + 10 + i * 3, tw.z - 4 + i * 2, 1.6, 12);
-      if (!sp) continue;
-      const [x, z] = sp, y = H(x, z), yaw = R() * 3;
+    const table = (x, z, yaw) => {
+      const y = H(x, z);
       box(0xa8744a, x, y + 0.72, z, 1.8, 0.08, 0.8, yaw);
       for (const v of [-0.7, 0.7]) { const [px, pz] = rot(x, z, yaw, 0, v); box(0xb33a2a, px, y + 0.42, pz, 1.8, 0.07, 0.3, yaw); }
       box(0x5a4636, x, y + 0.36, z, 0.12, 0.72, 0.12, yaw);
       solid(x, z, 0.9, 0.45, yaw, y, y + 0.76, 'table');
+    };
+    const yawK = sk ? sk.yaw : 0;
+    const pA = sk && (freeSpot(sk.x - fnx * 7, sk.z - fnz * 7, 4.2, 16) || freeSpot((sk.x + tw.x) / 2, (sk.z + tw.z) / 2, 4.2, 16));
+    if (pA) {
+      pergola(pA[0], pA[1], yawK, 3.9, 2.6, true);
+      // tables between the posts
+      for (const u of [-1.95, 1.95]) for (const v of [-1.3, 1.3]) { const [tx, tz] = rot(pA[0], pA[1], yawK, u, v); table(tx, tz, yawK); }
     }
+    const pB = freeSpot(tw.x - fnx * 8, tw.z - fnz * 8, 3.6, 10);
+    if (pB) { pergola(pB[0], pB[1], yawK, 3.2, 2.2); table(pB[0], pB[1], yawK); }
     const bs = freeSpot(tw.x - 5, tw.z - 3, 3.2, 14);
     if (bs) {
       const [x, z] = bs, y = H(x, z), yaw = Math.atan2(tw.x - x, tw.z - z);
@@ -401,7 +476,7 @@ export function buildProps(g, props) {
   let placed = 0;
   for (const fw of data.world.footways) {
     const pts = fw.map(([x, y]) => L(x, y));
-    for (let i = 0; i < pts.length - 1 && placed < 220; i++) {
+    for (let i = 0; i < pts.length - 1 && placed < 150; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
       const len = Math.hypot(bx - ax, bz - az);
       for (let t = 1.5; t < len; t += 3.5 + R() * 3) {
@@ -411,10 +486,12 @@ export function buildProps(g, props) {
         if (!clear(x, z, 0.8)) continue;
         const gy = H(x, z), sz = 0.6 + R() * 0.5;
         props.add(P.ico(0), 0x3f8f4a, x, gy + sz * 0.45, z, sz * 1.3, sz, sz * 1.3, R() * 6, 0, 0, 0.2);
+        props.add(P.ico(0), 0x4a9a50, x + sz * 0.35, gy + sz * 0.35, z - sz * 0.2, sz * 0.9, sz * 0.75, sz * 0.9, R() * 6, 0, 0, 0.2);
+        // little blossoms dotted over the top of the bush
         const fc = flowers[Math.floor(R() * flowers.length)];
-        for (let k = 0; k < 5; k++) {
-          const a = R() * 6.28, rr = sz * 0.5;
-          props.add(P.ico(0), fc, x + Math.cos(a) * rr, gy + sz * (0.6 + R() * 0.35), z + Math.sin(a) * rr, 0.22, 0.22, 0.22, R() * 6);
+        for (let k = 0; k < 8; k++) {
+          const a = R() * 6.28, rr = sz * (0.15 + R() * 0.4);
+          props.add(P.sphere(6, 4), fc, x + Math.cos(a) * rr, gy + sz * 0.9 - rr * 0.5, z + Math.sin(a) * rr, 0.13, 0.1, 0.13);
         }
         placed++;
       }
@@ -422,6 +499,53 @@ export function buildProps(g, props) {
   }
 
   g.animals.push({ update: (dt, now) => { for (const f of animated) f(dt, now); } });
+}
+
+// A paved square: a terrain-following grid with a herringbone brick texture, covering the union
+// of the given circles [x, z, r] wherever keep(x, z) says so.
+function paverPlaza(spots, keep) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#8f8878'; g.fillRect(0, 0, 256, 256);
+  const cols = ['#bfb4a2', '#b3a894', '#c8bda9', '#a99e8b', '#bcae97'];
+  // herringbone: 2x1 bricks, alternating horizontal and vertical in a stepped pattern
+  const u = 16;
+  let k = 0;
+  for (let i = -4; i < 20; i++) for (let j = -4; j < 20; j++) {
+    const x0 = (i * 2 + j) * u, y0 = (j * 2 - i) * u;
+    for (const [x, y, w, h] of [[x0, y0, 2 * u, u], [x0 + u, y0 + u, u, 2 * u]]) {
+      g.fillStyle = cols[(k++ * 7 + i * 3 + j) % cols.length];
+      for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) g.fillRect(x + ox + 1, y + oy + 1, w - 2, h - 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const inside = (x, z) => spots.some(([sx, sz, r]) => Math.hypot(x - sx, z - sz) < r);
+  const xs = spots.map(q => [q[0] - q[2], q[0] + q[2]]).flat(), zs = spots.map(q => [q[1] - q[2], q[1] + q[2]]).flat();
+  const x0 = Math.floor(Math.min(...xs)), x1 = Math.ceil(Math.max(...xs)), z0 = Math.floor(Math.min(...zs)), z1 = Math.ceil(Math.max(...zs));
+  const step = 0.8, pos = [], uv = [];
+  for (let x = x0; x < x1; x += step) for (let z = z0; z < z1; z += step) {
+    const cx = x + step / 2, cz = z + step / 2;
+    if (!inside(cx, cz) || !keep(cx, cz)) continue;
+    const P = (px, pz) => { pos.push(px, keep.h(px, pz) + 0.06, pz); uv.push(px / 3, pz / 3); };
+    P(x, z); P(x, z + step); P(x + step, z); P(x + step, z); P(x, z + step); P(x + step, z + step);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function segD(x, z, a, b) {
+  const ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez || 1;
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / l2));
+  return Math.hypot(x - a[0] - ex * t, z - a[1] - ez * t);
 }
 
 function circle(x, z, r, n) {
